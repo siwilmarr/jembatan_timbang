@@ -70,9 +70,6 @@ export default function Dashboard() {
         {!isConnected ? (
           <>
             <button onClick={() => connect({ baudRate: 9600 })}>Hubungkan Timbangan</button>
-            <button onClick={connectSimulated} title="Untuk testing tanpa alat timbangan fisik">
-              Mode Simulasi (tanpa alat)
-            </button>
           </>
         ) : (
           <button onClick={disconnect}>Putuskan Koneksi</button>
@@ -82,6 +79,12 @@ export default function Dashboard() {
           {weight.toFixed(2)} kg
         </div>
         <span>{isStable ? "Stabil" : "Belum stabil..."}</span>
+        <p>
+        Mode :
+        {import.meta.env.VITE_APP_MODE === "demo"
+        ? " Demo"
+        : " Production"}
+        </p>
         <span>{isOnline ? "Online" : "Offline"}</span>
 
         <button disabled={!isStable} onClick={handleLock}>

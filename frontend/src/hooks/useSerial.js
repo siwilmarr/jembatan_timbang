@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CasSimulator from "../simulator/CasSimulator";
 
+const APP_MODE = import.meta.env.VITE_APP_MODE || "demo";
+
 /**
  * Hook untuk membaca data berat dari indikator timbangan via Web Serial API
  * (RS232/USB). Mendukung konfigurasi baud rate, data bits, parity agar
@@ -63,8 +65,12 @@ export function useSerial() {
 }, []);
 
   const connect = useCallback(async (options = {}) => {
-    const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
-
+  const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
+    // Mode Demo
+  if (APP_MODE === "demo") {
+    connectSimulated();
+    return;
+    }
     if (!("serial" in navigator)) {
       setError("Browser tidak mendukung Web Serial API. Gunakan Chrome/Edge.");
       return;

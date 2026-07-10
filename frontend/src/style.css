@@ -1,0 +1,173 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #1f2937;
+  background: #f8fafc;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #eef2ff;
+}
+
+#root {
+  padding: 1.5rem;
+}
+
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  padding: 1.5rem;
+}
+
+.dashboard__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard__scale-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.weight-display {
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 3rem;
+  font-weight: 700;
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+}
+
+.weight-display--stable {
+  border: 2px solid #22c55e;
+}
+
+button {
+  border: none;
+  padding: 0.9rem 1.2rem;
+  font-size: 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: white;
+  background: #2563eb;
+  transition: background 0.2s ease;
+}
+
+button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.weighing-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.8rem;
+  font-size: 0.95rem;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.sync-status--green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.sync-status--yellow {
+  background: #fef3c7;
+  color: #854d0e;
+}
+
+.sync-status--red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* === Struk Thermal (hanya aktif saat print) === */
+.receipt-print {
+  display: none; /* Tersembunyi di layar biasa */
+}
+
+@media print {
+  /* Sembunyikan SELURUH dashboard, bukan tiap elemen individual */
+  #dashboard-root {
+    display: none;
+  }
+
+  .receipt-print {
+    display: block;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    padding: 2mm 3mm;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  @page {
+    size: 58mm auto;  /* sesuaikan dengan lebar kertas thermal asli Anda */
+    margin: 0;
+  }
+
+  .receipt-print h2 {
+    text-align: center;
+    font-size: 13px;
+    margin: 0 0 4px 0;
+    word-break: break-word;
+  }
+  .receipt-print__divider {
+    margin: 4px 0;
+    text-align: center;
+  }
+  .receipt-print__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    margin: 2px 0;
+    word-break: break-word;
+    page-break-inside: avoid;
+  }
+  .receipt-print__row--big {
+    font-size: 13px;
+    font-weight: bold;
+  }
+  .receipt-print__footer {
+    text-align: center;
+    margin-top: 8px;
+  }
+}

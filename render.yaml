@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: jembatan-timbang-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn core.wsgi --log-file -"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: DJANGO_SECRET_KEY
+        sync: false          # isi manual di dashboard Render (jangan taruh di sini)
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false          # isi setelah Render kasih domain, mis: jembatan-timbang-backend.onrender.com
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        value: "https://jembatan-timbang-eight.vercel.app"
+      - key: DATABASE_URL
+        sync: false          # isi manual: connection string Neon Postgres Anda

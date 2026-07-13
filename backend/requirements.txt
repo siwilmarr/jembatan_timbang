@@ -1,4 +1,4 @@
-asgiref==3.11.1
+﻿asgiref==3.11.1
 dj-database-url==3.1.2
 Django==5.2.16
 django-cors-headers==4.9.0
@@ -7,3 +7,4 @@ psycopg2-binary==2.9.12
 python-decouple==3.8
 sqlparse==0.5.5
 tzdata==2026.2
+gunicorn==23.0.0

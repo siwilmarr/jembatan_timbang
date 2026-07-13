@@ -72,19 +72,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": config(
-            "DB_ENGINE",
-            default="django.db.backends.postgresql"
-        ),
-        "NAME": config("DB_NAME"),
-        "USER": config("DB_USER"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST": config("DB_HOST"),
-        "PORT": config("DB_PORT"),
+# ADDED: dukungan DATABASE_URL (dipakai Neon/Vercel Postgres, format
+# "postgresql://user:pass@host/dbname?sslmode=require"). Kalau env var ini
+# ADA (kondisi di production/Vercel), dipakai langsung -- termasuk otomatis
+# mewajibkan SSL (ssl_require=True), sesuai syarat Neon.
+#
+# Kalau TIDAK ada (kondisi development lokal Anda saat ini, yang masih pakai
+# DB_NAME/DB_USER/dst terpisah di .env), fallback ke cara lama -- supaya
+# .env lokal Anda TIDAK PERLU diubah sama sekali.
+import dj_database_url
+
+DATABASE_URL = config("DATABASE_URL", default="")
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": config(
+                "DB_ENGINE",
+                default="django.db.backends.postgresql"
+            ),
+            "NAME": config("DB_NAME"),
+            "USER": config("DB_USER"),
+            "PASSWORD": config("DB_PASSWORD"),
+            "HOST": config("DB_HOST"),
+            "PORT": config("DB_PORT"),
+        }
+    }
 
 # Pastikan file sqlite bisa dibuat (mengatasi error: unable to open database file)
 if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":

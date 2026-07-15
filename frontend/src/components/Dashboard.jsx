@@ -124,12 +124,13 @@ export default function Dashboard() {
         }}
       />
 
-      {lastSaved && (
-        <button onClick={() => window.print()}>Cetak Tiket Timbang</button>
-      )}
-
+      <div className="dashboard__actions">
+        {lastSaved && (
+          <button onClick={() => window.print()}>Cetak Tiket Timbang</button>
+        )}
+        <button onClick={handleExport}>Ekspor ke Excel</button>
+      </div>
       <PrintReceipt transaction={lastSaved} />
-      <button onClick={handleExport}>Ekspor ke Excel</button>
     </div>
     <PrintReceipt transaction={lastSaved} />
     </>

@@ -6,6 +6,7 @@ import { exportTransactionsToExcel } from "../utils/exportExcel";
 import WeighingForm from "./WeighingForm";
 import SyncStatus from "./SyncStatus";
 import PrintReceipt from "./PrintReceipt";
+import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
 
 export default function Dashboard() {
   const {
@@ -23,6 +24,7 @@ export default function Dashboard() {
     netWeight,
   } = useSerial();
   const [pendingCount, setPendingCount] = useState(0);
+  const [serialConfig, setSerialConfig] = useState(loadSerialConfig());
   const [lockedWeight, setLockedWeight] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastSaved, setLastSaved] = useState(null);
@@ -60,79 +62,97 @@ export default function Dashboard() {
 
   return (
     <>
-    <div id="dashboard-root" className="dashboard">
-      <header className="dashboard__header">
-        <h1>Jembatan Timbang</h1>
-        <SyncStatus pendingCount={pendingCount} />
-      </header>
+      <div id="dashboard-root" className="dashboard">
+        <header className="dashboard__header">
+          <h1>Jembatan Timbang</h1>
+          <SyncStatus pendingCount={pendingCount} />
+        </header>
 
-      <section className="dashboard__scale-panel">
-        {!isConnected ? (
-          <>
-            <button onClick={() => connect({ baudRate: 9600 })}>Hubungkan Timbangan</button>
-          </>
-        ) : (
-          <button onClick={disconnect}>Putuskan Koneksi</button>
-        )}
+        <SettingsPanel
+          config={serialConfig}
+          onChange={setSerialConfig}
+          isConnected={isConnected}
+        />
+        <section className="dashboard__scale-panel">
+          <div className="scale-panel__connection">
+            {!isConnected ? (
+              <button className="btn-connect" onClick={() => connect(serialConfig)}>Hubungkan Timbangan</button>
+            ) : (
+              <button className="btn-disconnect" onClick={disconnect}>Putuskan Koneksi</button>
+            )}
+          </div>
 
-        <div className={`weight-display ${isStable ? "weight-display--stable" : ""}`}>
-          {weight.toFixed(2)} kg
-        </div>
-        <span>{isStable ? "Stabil" : "Belum stabil..."}</span>
-        <p>
-        Mode :
-        {import.meta.env.VITE_APP_MODE === "demo"
-        ? " Demo"
-        : " Production"}
-        </p>
-        <span>{isOnline ? "Online" : "Offline"}</span>
-
-        <button disabled={!isStable} onClick={handleLock}>
-          Stabilize / Lock
-        </button>
-
-        <button disabled={!isConnected || !isStable} onClick={zero} title="Reset titik nol (mis. platform belum benar-benar kosong)">
-          Zero
-        </button>
-
-        {tareWeight === 0 ? (
-          <button disabled={!isConnected || !isStable} onClick={tare} title="Simpan berat saat ini sebagai tara (mis. berat kendaraan kosong)">
-            Tare
-          </button>
-        ) : (
-          <>
-            <span>Tara: {tareWeight.toFixed(2)} kg</span>
-            <div className="weight-display weight-display--net">
-              Neto: {netWeight.toFixed(2)} kg
+          <div className="scale-panel__readouts">
+            <div className={`weight-display ${isStable ? "weight-display--stable" : ""}`}>
+              <span className="weight-display__label">Gross</span>
+              <span className="weight-display__val">{weight.toFixed(2)} kg</span>
             </div>
-            <button onClick={clearTare}>Hapus Tare</button>
-          </>
-        )}
+            {tareWeight !== 0 && (
+              <div className="weight-display weight-display--net">
+                <span className="weight-display__label">Netto</span>
+                <span className="weight-display__val">{netWeight.toFixed(2)} kg</span>
+              </div>
+            )}
+          </div>
 
-        <button type="button" onClick={() => syncPendingTransactions().catch(console.error)}>
-          Sinkronkan Sekarang
-        </button>
+          <div className="scale-panel__status">
+            <span className={`badge ${isStable ? "badge--success" : "badge--warning"}`}>
+              {isStable ? "● Stabil" : "○ Mengukur..."}
+            </span>
+            <span className="badge badge--info">
+              Mode: {import.meta.env.VITE_APP_MODE === "demo" ? "Demo" : "Production"}
+            </span>
+            <span className={`badge ${isOnline ? "badge--success" : "badge--danger"}`}>
+              {isOnline ? "Online" : "Offline"}
+            </span>
+            {tareWeight !== 0 && (
+              <span className="badge badge--secondary">
+                Tara: {tareWeight.toFixed(2)} kg
+              </span>
+            )}
+          </div>
 
-        {error && <p className="error">{error}</p>}
-      </section>
+          <div className="scale-panel__actions">
+            <button disabled={!isStable} onClick={handleLock}>
+              Stabilize / Lock
+            </button>
+            <button disabled={!isConnected || !isStable} onClick={zero} title="Reset titik nol (mis. platform belum benar-benar kosong)">
+              Zero
+            </button>
+            {tareWeight === 0 ? (
+              <button disabled={!isConnected || !isStable} onClick={tare} title="Simpan berat saat ini sebagai tara (mis. berat kendaraan kosong)">
+                Tare
+              </button>
+            ) : (
+              <button onClick={clearTare} className="btn-danger">
+                Hapus Tare
+              </button>
+            )}
+            <button type="button" onClick={() => syncPendingTransactions().catch(console.error)}>
+              Sinkronkan Sekarang
+            </button>
+          </div>
 
-      <WeighingForm
-        lockedWeight={lockedWeight}
-        onSaved={(savedTx) => {
-          setLockedWeight(null);
-          setLastSaved(savedTx);
-        }}
-      />
+          {error && <p className="error">{error}</p>}
+        </section>
 
-      <div className="dashboard__actions">
-        {lastSaved && (
-          <button onClick={() => window.print()}>Cetak Tiket Timbang</button>
-        )}
-        <button onClick={handleExport}>Ekspor ke Excel</button>
+        <WeighingForm
+          lockedWeight={lockedWeight}
+          onSaved={(savedTx) => {
+            setLockedWeight(null);
+            setLastSaved(savedTx);
+          }}
+        />
+
+        <div className="dashboard__actions">
+          {lastSaved && (
+            <button onClick={() => window.print()}>Cetak Tiket Timbang</button>
+          )}
+          <button onClick={handleExport}>Ekspor ke Excel</button>
+        </div>
+        <PrintReceipt transaction={lastSaved} />
       </div>
       <PrintReceipt transaction={lastSaved} />
-    </div>
-    <PrintReceipt transaction={lastSaved} />
     </>
   );
 }

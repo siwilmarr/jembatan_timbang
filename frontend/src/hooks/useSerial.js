@@ -6,7 +6,7 @@ const APP_MODE = import.meta.env.VITE_APP_MODE || "demo";
 /**
  * Hook untuk membaca data berat dari indikator timbangan via Web Serial API
  * (RS232/USB). Mendukung konfigurasi baud rate, data bits, parity agar
- * cocok dengan berbagai merk timbangan (Avery, CAS, dll).
+ * cocok dengan berbagai merk timbangan (Avery, CAS, GSC, dll).
  *
  * Catatan: Web Serial API hanya berjalan di Chrome/Edge, harus HTTPS
  * (atau localhost), dan wajib dipicu oleh interaksi user (klik tombol).
@@ -24,7 +24,33 @@ export function useSerial() {
   const stableTimerRef = useRef(null);
   const lastWeightRef = useRef(null);
   const simulateTimerRef = useRef(null);
-  const CAS_CI2001A_REGEX = /(ST|US)\D{0,3}(GS|NT|OL)\D{0,3}([+-]?\s*\d+\.?\d*)\s*(kg|t)?/i;
+
+  // UPDATED: regex parsing sekarang mendukung DUA format sekaligus:
+  //
+  // 1. CAS CI-2001A (format asli):        ST,GS,+001234kg
+  // 2. GSC SGW-3015PS (spesifikasi resmi): ST,NT,+025430kg\r\n
+  //
+  // Perbedaan yang ditambahkan untuk GSC SGW-3015PS:
+  //  - Status kestabilan (header 1) bisa juga OL (overload), bukan cuma ST/US
+  //  - Mode berat (header 2) di GSC bisa berupa kode 1 huruf (G/N/T) selain
+  //    2 huruf (GS/NT/TR) -- alternation diurutkan panjang->pendek supaya
+  //    "GS" dicoba dulu sebelum "G", dst (kalau tidak, regex akan berhenti
+  //    di huruf pertama saja dan salah membaca sisa string).
+  //  - Satuan sekarang juga menerima "lb" selain "kg"/"t"
+  //  - Terminator \r\n (CR+LF) sudah otomatis tercakup karena processBuffer()
+  //    mencari karakter "\n" untuk memotong buffer, dan "\r" ikut terbuang
+  //    sebagai bagian dari \D (karakter non-digit) di antara token.
+  //
+  // PENTING: kode ini belum pernah diuji ke alat fisik GSC SGW-3015PS asli
+  // (tidak ada akses alat saat pengerjaan). Regex ini disusun berdasarkan
+  // spesifikasi teknis yang diberikan (bukan hasil rekam data mentah asli).
+  // Begitu alat fisik tersedia, WAJIB diverifikasi ulang: sambungkan alat,
+  // klik "Hubungkan Timbangan" (pastikan VITE_APP_MODE bukan "demo"), dan
+  // pastikan angka berat yang tampil di app sesuai dengan angka di layar
+  // indikator. Kalau tidak cocok/tidak terbaca sama sekali, kirim contoh
+  // data mentah asli dari alat untuk penyesuaian lebih lanjut.
+  const WEIGHT_INDICATOR_REGEX =
+    /(ST|US|OL)\D{0,3}(GS|NT|TR|OL|G|N|T)\D{0,3}([+-]?\s*\d+\.?\d*)\s*(kg|lb|t)?/i;
 
   // Raw weight = angka mentah dari alat/simulasi, SEBELUM dikurangi zero offset.
   // weight (state) = raw - zeroOffset -> inilah yang ditampilkan ke user.
@@ -32,44 +58,49 @@ export function useSerial() {
   const zeroOffsetRef = useRef(0);
   const [tareWeight, setTareWeight] = useState(0);
 
-/**
- * CAS CI-2001A Emulator
- * Menjalankan simulator tanpa membutuhkan alat fisik.
- */
+  /**
+   * CAS CI-2001A Emulator
+   * Menjalankan simulator tanpa membutuhkan alat fisik.
+   */
   const connectSimulated = useCallback(() => {
 
-  setError(null);
+    setError(null);
 
-  // jika simulator sebelumnya masih berjalan
-  simulatorRef.current?.stop();
+    // jika simulator sebelumnya masih berjalan
+    simulatorRef.current?.stop();
 
-  // reset kondisi timbangan
-  setIsConnected(true);
-  setIsStable(false);
+    // reset kondisi timbangan
+    setIsConnected(true);
+    setIsStable(false);
 
-  zeroOffsetRef.current = 0;
-  setWeight(0);
-  setTareWeight(0);
+    zeroOffsetRef.current = 0;
+    setWeight(0);
+    setTareWeight(0);
 
-  // buat simulator baru
-  simulatorRef.current = new CasSimulator((frame) => {
+    // buat simulator baru
+    simulatorRef.current = new CasSimulator((frame) => {
 
-    // frame dikirim seperti alat CAS asli
-    parseFrame(frame);
+      // frame dikirim seperti alat CAS asli
+      parseFrame(frame);
 
-  });
+    });
 
-  // mulai simulasi
-  simulatorRef.current.start();
+    // mulai simulasi
+    simulatorRef.current.start();
 
-}, []);
+  }, []);
 
   const connect = useCallback(async (options = {}) => {
-  const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
+    // Default baudRate=9600, dataBits=8, stopBits=1, parity=none ini SESUAI
+    // dengan spesifikasi hardware GSC SGW-3015PS (F-5 = 9600 BPS paling umum;
+    // protokol dikunci di level mikrokontroler ke 8N1). Kalau di lapangan
+    // menu F-5 alat diset ke nilai lain, ubah dari SettingsPanel di UI,
+    // tidak perlu ubah default di sini.
+    const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
     // Mode Demo
-  if (APP_MODE === "demo") {
-    connectSimulated();
-    return;
+    if (APP_MODE === "demo") {
+      connectSimulated();
+      return;
     }
     if (!("serial" in navigator)) {
       setError("Browser tidak mendukung Web Serial API. Gunakan Chrome/Edge.");
@@ -144,86 +175,93 @@ export function useSerial() {
 
   function parseFrame(frame) {
 
-    const match = frame.match(CAS_CI2001A_REGEX);
+    const match = frame.match(WEIGHT_INDICATOR_REGEX);
 
     if (!match) return;
 
     const [, stability, type, rawWeight] = match;
 
     const parsedWeight = parseFloat(
-        rawWeight.replace(/\s/g, "")
+      rawWeight.replace(/\s/g, "")
     );
 
     if (isNaN(parsedWeight)) return;
 
+    // OL di posisi status kestabilan (header 1) berarti overload -- alat
+    // fisik sedang menerima beban melebihi kapasitas. Tampilkan sebagai
+    // error yang jelas ke operator, jangan diam-diam dianggap "stabil".
+    if (stability.toUpperCase() === "OL") {
+      setError("Alat timbangan overload (beban melebihi kapasitas).");
+    }
+
     updateWeight(
-        parsedWeight,
-        stability.toUpperCase() === "ST",
-        type.toUpperCase()
+      parsedWeight,
+      stability.toUpperCase() === "ST",
+      type.toUpperCase()
     );
 
-}
+  }
 
-function processBuffer() {
+  function processBuffer() {
 
     const endIndex = bufferRef.current.indexOf("\n");
 
     if (endIndex === -1) return;
 
     const frame =
-        bufferRef.current.slice(0, endIndex + 1);
+      bufferRef.current.slice(0, endIndex + 1);
 
     bufferRef.current =
-        bufferRef.current.slice(endIndex + 1);
+      bufferRef.current.slice(endIndex + 1);
 
     parseFrame(frame);
 
-}
+  }
 
   const STABLE_DURATION_MS = 2000; // sesuai spesifikasi: stabil beberapa detik
 
-/**
- * Dipakai baik oleh:
- * - Serial Port (alat asli)
- * - CAS Simulator
- */
+  /**
+   * Dipakai baik oleh:
+   * - Serial Port (alat asli)
+   * - CAS Simulator
+   */
   const updateWeight = (
-  value,
-  stable = null,
-  mode = "GS"
-) => {
+    value,
+    stable = null,
+    mode = "GS"
+  ) => {
 
-  rawWeightRef.current = value;
+    rawWeightRef.current = value;
 
-  setWeight(value - zeroOffsetRef.current);
+    setWeight(value - zeroOffsetRef.current);
 
-  // Jika simulator/alat sudah memberi tahu status stabil,
-  // gunakan status tersebut.
-  if (stable !== null) {
-    setIsStable(stable);
-    lastWeightRef.current = value;
-    return;
-  }
+    // Jika simulator/alat sudah memberi tahu status stabil,
+    // gunakan status tersebut.
+    if (stable !== null) {
+      setIsStable(stable);
+      lastWeightRef.current = value;
+      return;
+    }
 
-  // Jika status stabil tidak dikirim (misalnya mode simulasi lama),
-  // gunakan logika timer seperti sebelumnya.
-  if (lastWeightRef.current !== value) {
+    // Jika status stabil tidak dikirim (misalnya mode simulasi lama),
+    // gunakan logika timer seperti sebelumnya.
+    if (lastWeightRef.current !== value) {
 
-    lastWeightRef.current = value;
+      lastWeightRef.current = value;
 
-    setIsStable(false);
+      setIsStable(false);
 
-    clearTimeout(stableTimerRef.current);
+      clearTimeout(stableTimerRef.current);
 
-    stableTimerRef.current = setTimeout(() => {
+      stableTimerRef.current = setTimeout(() => {
 
-      setIsStable(true);
+        setIsStable(true);
 
-    }, STABLE_DURATION_MS);
+      }, STABLE_DURATION_MS);
 
-  }
+    }
 
-};
+  };
 
   /**
    * ZEROING — menjadikan berat saat ini sebagai titik nol baru (mengoreksi
@@ -261,36 +299,36 @@ function processBuffer() {
     setTareWeight(0);
   }, []);
 
-const disconnect = useCallback(async () => {
+  const disconnect = useCallback(async () => {
 
-  // hentikan CAS Emulator jika sedang berjalan
-  simulatorRef.current?.stop();
-  simulatorRef.current = null;
+    // hentikan CAS Emulator jika sedang berjalan
+    simulatorRef.current?.stop();
+    simulatorRef.current = null;
 
-  // hentikan simulasi lama (kalau masih ada)
-  clearInterval(simulateTimerRef.current);
+    // hentikan simulasi lama (kalau masih ada)
+    clearInterval(simulateTimerRef.current);
 
-  try {
+    try {
 
-    await readerRef.current?.cancel();
+      await readerRef.current?.cancel();
 
-    await portRef.current?.close();
+      await portRef.current?.close();
 
-  } catch (err) {
+    } catch (err) {
 
-    // abaikan error saat menutup
+      // abaikan error saat menutup
 
-  } finally {
+    } finally {
 
-    readerRef.current = null;
-    portRef.current = null;
+      readerRef.current = null;
+      portRef.current = null;
 
-    setIsConnected(false);
-    setIsStable(false);
+      setIsConnected(false);
+      setIsStable(false);
 
-  }
+    }
 
-}, []);
+  }, []);
 
   return {
     connect,

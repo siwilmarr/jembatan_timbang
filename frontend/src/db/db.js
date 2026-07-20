@@ -17,13 +17,7 @@ db.version(1).stores({
  * yang bertanggung jawab mengirim ke server (lihat services/syncService.js).
  */
 export async function saveTransactionLocally(transaction) {
-  // FIXED: sebelumnya baris ini menimpa ulang created_at_local dengan
-  // new Date().toISOString() milik sendiri, padahal WeighingForm.jsx SUDAH
-  // set created_at_local saat submit. Akibatnya nilai yang dipakai UI
-  // (lewat onSaved(newTx)) bisa beda beberapa milidetik dari yang benar-benar
-  // tersimpan — padahal field ini dipakai untuk audit selisih waktu
-  // lokal vs server. Sekarang created_at_local HANYA di-set di satu tempat
-  // (WeighingForm.jsx), di sini cuma diteruskan apa adanya.
+
   return db.weighing_transactions.add({
     ...transaction,
     sync_status: "pending",

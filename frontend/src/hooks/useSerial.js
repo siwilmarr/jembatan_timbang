@@ -18,12 +18,6 @@ export function useSerial() {
   const [isStable, setIsStable] = useState(false);
   const [error, setError] = useState(null);
 
-  // ADDED: log debug -- setiap chunk mentah yang diterima dari port serial,
-  // setiap frame yang berhasil dipisah oleh processBuffer(), dan hasil
-  // parsing (cocok/tidak cocok dengan regex). Ini supaya kalau berat tidak
-  // berubah di layar, kita bisa lihat PERSIS di tahap mana masalahnya:
-  // tidak ada data sama sekali / data sampah (baud rate salah) / data
-  // bersih tapi tidak cocok format regex.
   const [debugLog, setDebugLog] = useState([]);
 
   const pushDebugLog = useCallback((type, text) => {
@@ -44,11 +38,20 @@ export function useSerial() {
   const lastWeightRef = useRef(null);
   const simulateTimerRef = useRef(null);
 
-  // Regex parsing mendukung DUA format:
-  // 1. CAS CI-2001A:        ST,GS,+001234kg
-  // 2. GSC SGW-3015PS:      ST,NT,+025430kg\r\n
-  const WEIGHT_INDICATOR_REGEX =
+  // FORMAT 1 -- "detail" sesuai dokumentasi CAS/GSC tertulis:
+  //   ST,GS,+001234kg   atau   ST,NT,+025430kg\r\n
+  // Dicoba lebih dulu, kalau-kalau ada unit/firmware yang memang kirim
+  // format lengkap ini dengan status stabil & mode eksplisit.
+  const DETAILED_REGEX =
     /(ST|US|OL)\D{0,3}(GS|NT|TR|OL|G|N|T)\D{0,3}([+-]?\s*\d+\.?\d*)\s*(kg|lb|t)?/i;
+
+  // FORMAT 2 -- "sederhana", TERBUKTI cocok dengan data mentah asli yang
+  // terekam dari alat GSC SGW-3015PS fisik Anda lewat panel debug:
+  //   \x02   00 kg \r\n   (STX, spasi, angka, spasi, "kg", CRLF)
+  // Tidak ada kode status stabil / mode di format ini -- karena itu status
+  // stabil dihitung otomatis oleh aplikasi sendiri (timer 2 detik yang
+  // sudah ada di updateWeight(), lihat parameter stable=null di bawah).
+  const SIMPLE_REGEX = /\x02?\s*([+-]?\d+\.?\d*)\s*(kg|lb|t)?/i;
 
   const rawWeightRef = useRef(0);
   const zeroOffsetRef = useRef(0);
@@ -149,13 +152,6 @@ export function useSerial() {
         if (done) break;
         if (value) {
           const chunkText = decoder.decode(value, { stream: true });
-          // ADDED: log SETIAP potongan byte mentah yang diterima, apa
-          // adanya (dibungkus JSON.stringify supaya karakter tak terlihat
-          // seperti \r \n atau byte sampah tetap kelihatan jelas).
-          // Kalau log ini TIDAK PERNAH muncul sama sekali walau alat sudah
-          // terhubung, artinya port terbuka tapi tidak ada data masuk sama
-          // sekali -- kemungkinan besar F-6 di alat belum diset ke mode
-          // stream (1), atau kabel TX/RX tertukar, atau salah pilih port.
           pushDebugLog("raw", JSON.stringify(chunkText));
           bufferRef.current += chunkText;
           processBuffer();
@@ -170,35 +166,48 @@ export function useSerial() {
   };
 
   function parseFrame(frame) {
-    const match = frame.match(WEIGHT_INDICATOR_REGEX);
-
-    if (!match) {
-      // ADDED: log kalau frame diterima TAPI tidak cocok format regex.
-      // Ini beda kasus dari "tidak ada data sama sekali" -- di sini data
-      // MASUK, cuma formatnya tidak sesuai dugaan kita. Kalau ini yang
-      // terjadi, kirim isi log 'raw'/'frame' ini untuk penyesuaian regex.
-      pushDebugLog("warn", `Frame diterima tapi TIDAK COCOK format: ${JSON.stringify(frame)}`);
+    // Coba format detail dulu (ST/US,GS/NT,+angka)
+    let match = frame.match(DETAILED_REGEX);
+    if (match) {
+      const [, stability, type, rawWeight] = match;
+      const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
+      if (isNaN(parsedWeight)) {
+        pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+        return;
+      }
+      pushDebugLog(
+        "success",
+        `✅ (format detail) stabil=${stability.toUpperCase()} mode=${type.toUpperCase()} berat=${parsedWeight}`
+      );
+      if (stability.toUpperCase() === "OL") {
+        setError("Alat timbangan overload (beban melebihi kapasitas).");
+      }
+      updateWeight(parsedWeight, stability.toUpperCase() === "ST", type.toUpperCase());
       return;
     }
 
-    const [, stability, type, rawWeight] = match;
-
-    const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
-    if (isNaN(parsedWeight)) {
-      pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+    // Fallback: format sederhana (STX + angka + kg), terbukti cocok
+    // dengan data asli alat GSC SGW-3015PS Anda.
+    match = frame.match(SIMPLE_REGEX);
+    if (match) {
+      const [, rawWeight] = match;
+      const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
+      if (isNaN(parsedWeight)) {
+        pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+        return;
+      }
+      pushDebugLog(
+        "success",
+        `✅ (format sederhana) berat=${parsedWeight} (status stabil dihitung otomatis oleh app)`
+      );
+      // stable=null -> updateWeight() pakai timer 2 detik (angka tidak
+      // berubah selama 2 detik = dianggap stabil), karena format ini tidak
+      // mengirim status stabil secara eksplisit.
+      updateWeight(parsedWeight, null, "GS");
       return;
     }
 
-    pushDebugLog(
-      "success",
-      `✅ stabil=${stability.toUpperCase()} mode=${type.toUpperCase()} berat=${parsedWeight}`
-    );
-
-    if (stability.toUpperCase() === "OL") {
-      setError("Alat timbangan overload (beban melebihi kapasitas).");
-    }
-
-    updateWeight(parsedWeight, stability.toUpperCase() === "ST", type.toUpperCase());
+    pushDebugLog("warn", `Frame diterima tapi TIDAK COCOK format apa pun: ${JSON.stringify(frame)}`);
   }
 
   function processBuffer() {

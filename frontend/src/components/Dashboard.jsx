@@ -7,6 +7,7 @@ import WeighingForm from "./WeighingForm";
 import SyncStatus from "./SyncStatus";
 import PrintReceipt from "./PrintReceipt";
 import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
+import DebugPanel from "./DebugPanel";
 
 export default function Dashboard() {
   const {
@@ -22,12 +23,15 @@ export default function Dashboard() {
     clearTare,
     tareWeight,
     netWeight,
+    debugLog,
+    clearDebugLog,
   } = useSerial();
   const [pendingCount, setPendingCount] = useState(0);
   const [serialConfig, setSerialConfig] = useState(loadSerialConfig());
   const [lockedWeight, setLockedWeight] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastSaved, setLastSaved] = useState(null);
+  const [isTestingMode, setIsTestingMode] = useState(false);
 
   const handleExport = async () => {
     const history = await getTodayHistory();
@@ -73,10 +77,21 @@ export default function Dashboard() {
           onChange={setSerialConfig}
           isConnected={isConnected}
         />
+
+        <DebugPanel
+          isTestingMode={isTestingMode}
+          onToggleTestingMode={setIsTestingMode}
+          debugLog={debugLog}
+          clearDebugLog={clearDebugLog}
+          isConnected={isConnected}
+        />
+
         <section className="dashboard__scale-panel">
           <div className="scale-panel__connection">
             {!isConnected ? (
-              <button className="btn-connect" onClick={() => connect(serialConfig)}>Hubungkan Timbangan</button>
+              <button onClick={() => (isTestingMode ? connectSimulated() : connect({ baudRate: 9600 }))}>
+                Hubungkan Timbangan
+              </button>
             ) : (
               <button className="btn-disconnect" onClick={disconnect}>Putuskan Koneksi</button>
             )}

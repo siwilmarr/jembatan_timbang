@@ -33,15 +33,9 @@ export async function syncPendingTransactions() {
 async function runSync() {
   if (!navigator.onLine) return { synced: 0, skipped: true };
 
-  // ADDED: cegah request dikirim tanpa token (dulu tidak perlu karena API
-  // belum diproteksi sama sekali). Tanpa pengecekan ini, sync akan selalu
-  // gagal 401 tanpa pesan yang jelas kalau device lupa dikonfigurasi.
-  if (!API_TOKEN) {
-    console.error(
-      "VITE_DEVICE_API_TOKEN belum diset di .env — sync dibatalkan. " +
-      "Lihat dokumentasi setup device."
-    );
-    return { synced: 0, skipped: true, error: "missing_token" };
+  const userToken = localStorage.getItem("user_token");
+  if (!userToken) {
+    return { synced: 0, skipped: true, reason: "not_logged_in" };
   }
 
   const pending = await getPendingTransactions();
@@ -53,7 +47,7 @@ async function runSync() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Token ${API_TOKEN}`, // ADDED
+      Authorization: `Token ${userToken}`,
     },
     body: JSON.stringify(payload),
   });

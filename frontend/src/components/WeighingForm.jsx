@@ -22,7 +22,7 @@ function getLocalISOString() {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}${diff}${timezoneHour}:${timezoneMinute}`;
 }
 
-export default function WeighingForm({ lockedWeight, onSaved }) {
+export default function WeighingForm({ lockedWeight, operatorUsername, onSaved }) {
   const [form, setForm] = useState({
     nomor_polisi: "",
     nama_driver: "",
@@ -55,6 +55,7 @@ export default function WeighingForm({ lockedWeight, onSaved }) {
       const newTx = {
         id: uuidv4(), ...form,
         berat_kg: lockedWeight,
+        operator: operatorUsername || "device",
         created_at_local: getLocalISOString()
       };
       await saveTransactionLocally(newTx);

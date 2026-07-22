@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSerial } from "../hooks/useSerial";
-import { getPendingTransactions, getTodayHistory } from "../db/db";
+import { getPendingTransactions } from "../db/db";
 import { syncPendingTransactions } from "../services/syncService";
-import { exportTransactionsToExcel } from "../utils/exportExcel";
 import WeighingForm from "./WeighingForm";
 import SyncStatus from "./SyncStatus";
-import PrintReceipt from "./PrintReceipt";
 import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
 import DebugPanel from "./DebugPanel";
 
-export default function Dashboard() {
+export default function Dashboard({ userRole, operatorUsername }) {
   const {
     connect,
     connectSimulated,
@@ -33,10 +31,7 @@ export default function Dashboard() {
   const [lastSaved, setLastSaved] = useState(null);
   const [isTestingMode, setIsTestingMode] = useState(false);
 
-  const handleExport = async () => {
-    const history = await getTodayHistory();
-    exportTransactionsToExcel(history);
-  };
+
 
   useEffect(() => {
     const refreshPending = () => getPendingTransactions().then((rows) => setPendingCount(rows.length));
@@ -78,13 +73,15 @@ export default function Dashboard() {
           isConnected={isConnected}
         />
 
-        <DebugPanel
-          isTestingMode={isTestingMode}
-          onToggleTestingMode={setIsTestingMode}
-          debugLog={debugLog}
-          clearDebugLog={clearDebugLog}
-          isConnected={isConnected}
-        />
+        {userRole?.includes("Admin") && (
+          <DebugPanel
+            isTestingMode={isTestingMode}
+            onToggleTestingMode={setIsTestingMode}
+            debugLog={debugLog}
+            clearDebugLog={clearDebugLog}
+            isConnected={isConnected}
+          />
+        )}
 
         <section className="dashboard__scale-panel">
           <div className="scale-panel__connection">
@@ -153,6 +150,7 @@ export default function Dashboard() {
 
         <WeighingForm
           lockedWeight={lockedWeight}
+          operatorUsername={operatorUsername}
           onSaved={(savedTx) => {
             setLockedWeight(null);
             setLastSaved(savedTx);
@@ -161,13 +159,10 @@ export default function Dashboard() {
 
         <div className="dashboard__actions">
           {lastSaved && (
-            <button onClick={() => window.print()}>Cetak Tiket Timbang</button>
+            <button onClick={() => window.printTransaction?.(lastSaved)}>Cetak Tiket Timbang</button>
           )}
-          <button onClick={handleExport}>Ekspor ke Excel</button>
         </div>
-        <PrintReceipt transaction={lastSaved} />
       </div>
-      <PrintReceipt transaction={lastSaved} />
     </>
   );
 }

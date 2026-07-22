@@ -1,5 +1,36 @@
 import uuid
 from django.db import models, transaction
+from django.contrib.auth.models import User
+
+
+class Warehouse(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=20, unique=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.warehouse.name if self.warehouse else 'No Warehouse'}"
+
+
+class Destination(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Cargo(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
 
 
 class WeighingTransaction(models.Model):
@@ -24,7 +55,9 @@ class WeighingTransaction(models.Model):
     nomor_polisi = models.CharField(max_length=20)
     nama_driver = models.CharField(max_length=100)
     jenis_muatan = models.CharField(max_length=100, blank=True)
+    tujuan = models.CharField(max_length=100, blank=True)
     jenis_timbang = models.CharField(max_length=10, choices=JENIS_TIMBANG)
+    warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.SET_NULL)
 
     berat_kg = models.DecimalField(max_digits=10, decimal_places=2)
     berat_bersih_kg = models.DecimalField(

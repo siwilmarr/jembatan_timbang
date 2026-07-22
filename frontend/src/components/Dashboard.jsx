@@ -7,7 +7,7 @@ import SyncStatus from "./SyncStatus";
 import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
 import DebugPanel from "./DebugPanel";
 
-export default function Dashboard({ userRole, operatorUsername }) {
+export default function Dashboard({ userRole, operatorUsername, userWarehouse }) {
   const {
     connect,
     connectSimulated,
@@ -151,6 +151,7 @@ export default function Dashboard({ userRole, operatorUsername }) {
         <WeighingForm
           lockedWeight={lockedWeight}
           operatorUsername={operatorUsername}
+          userWarehouse={userWarehouse}
           onSaved={(savedTx) => {
             setLockedWeight(null);
             setLastSaved(savedTx);

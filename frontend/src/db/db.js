@@ -5,10 +5,15 @@ import Dexie from "dexie";
 export const db = new Dexie("jembatan_timbang_db");
 
 db.version(1).stores({
-  // ++localId = auto increment key lokal (bukan dikirim ke server)
-  // id = uuid, dipakai sebagai primary key di server juga (idempotency)
   weighing_transactions:
     "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local",
+});
+
+db.version(2).stores({
+  weighing_transactions:
+    "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
+  destinations: "++id, name",
+  cargos: "++id, name",
 });
 
 /**

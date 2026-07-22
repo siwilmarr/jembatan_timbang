@@ -5,8 +5,13 @@ from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import WeighingTransaction
-from .serializers import WeighingTransactionSerializer
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile
+from .serializers import (
+    WeighingTransactionSerializer,
+    WarehouseSerializer,
+    DestinationSerializer,
+    CargoSerializer,
+)
 from .permissions import IsAdminOrReadOnly
 
 
@@ -20,11 +25,25 @@ class CustomObtainAuthToken(ObtainAuthToken):
         roles = list(user.groups.values_list('name', flat=True))
         if user.is_superuser and "Admin" not in roles:
             roles.append("Admin")
+
+        # Ambil info warehouse dari UserProfile (jika ada)
+        warehouse_id = None
+        warehouse_name = None
+        try:
+            profile = user.profile
+            if profile.warehouse:
+                warehouse_id = profile.warehouse.id
+                warehouse_name = profile.warehouse.name
+        except UserProfile.DoesNotExist:
+            pass
+
         return Response({
             'token': token.key,
             'user_id': user.pk,
             'username': user.username,
-            'roles': roles
+            'roles': roles,
+            'warehouse_id': warehouse_id,
+            'warehouse_name': warehouse_name,
         })
 
 
@@ -33,6 +52,7 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
     Endpoint utama:
       GET    /api/weighing/            -> riwayat penimbangan
       POST   /api/weighing/sync/       -> terima satu ATAU banyak (list) transaksi
+      POST   /api/weighing/reset/      -> hapus massal berdasarkan filter (Admin only)
 
     FIXED: permission_classes sebenarnya sudah diwajibkan lewat
     DEFAULT_PERMISSION_CLASSES di settings.py, tapi dicantumkan eksplisit di
@@ -46,8 +66,14 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = WeighingTransaction.objects.all()
         gte = self.request.query_params.get("created_at_local_gte", None)
+        lte = self.request.query_params.get("created_at_local_lte", None)
+        wh = self.request.query_params.get("warehouse_id", None)
         if gte:
             queryset = queryset.filter(created_at_local__gte=gte)
+        if lte:
+            queryset = queryset.filter(created_at_local__lte=lte)
+        if wh:
+            queryset = queryset.filter(warehouse_id=wh)
         return queryset
 
     @action(detail=False, methods=["post"], url_path="sync")
@@ -55,16 +81,6 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
         data = request.data
         items = data if isinstance(data, list) else [data]
 
-        # FIXED: sebelumnya pakai serializer many=True dengan
-        # is_valid(raise_exception=True) — SATU record tidak valid membuat
-        # SELURUH batch gagal, termasuk record lain yang sebenarnya valid.
-        # Karena frontend mengulang payload yang sama tiap 15 detik
-        # (lihat syncService.js/startAutoSync), satu data korup akan
-        # mengunci seluruh antrian offline selamanya.
-        #
-        # Sekarang tiap item diproses SATU-SATU dan independen: yang valid
-        # tetap ke-sync, yang gagal dilaporkan terpisah di response supaya
-        # bisa ditindaklanjuti manual tanpa memblokir yang lain.
         synced = []
         failed = []
 
@@ -85,3 +101,55 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=False, methods=["post"], url_path="reset")
+    def reset(self, request):
+        """Hapus massal transaksi berdasarkan filter tanggal & warehouse. Admin only."""
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name="Admin").exists()
+        if not is_admin:
+            return Response(
+                {"detail": "Hanya Admin yang dapat melakukan reset data."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        gte = request.data.get("created_at_local_gte")
+        lte = request.data.get("created_at_local_lte")
+        wh = request.data.get("warehouse_id")
+
+        if not gte or not lte:
+            return Response(
+                {"detail": "Parameter created_at_local_gte dan created_at_local_lte wajib diisi."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = WeighingTransaction.objects.filter(
+            created_at_local__gte=gte,
+            created_at_local__lte=lte,
+        )
+        if wh:
+            qs = qs.filter(warehouse_id=wh)
+
+        count, _ = qs.delete()
+        return Response({"deleted_count": count}, status=status.HTTP_200_OK)
+
+
+class WarehouseViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Warehouse.objects.all()
+    serializer_class = WarehouseSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+
+class DestinationViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Destination.objects.all()
+    serializer_class = DestinationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+
+class CargoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Cargo.objects.all()
+    serializer_class = CargoSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None

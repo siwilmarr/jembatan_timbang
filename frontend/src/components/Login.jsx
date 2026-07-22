@@ -38,6 +38,8 @@ export default function Login({ onLoginSuccess }) {
         username: data.username,
         roles: data.roles,
         user_id: data.user_id,
+        warehouse_id: data.warehouse_id,
+        warehouse_name: data.warehouse_name,
       }));
 
       // Trigger callback sukses

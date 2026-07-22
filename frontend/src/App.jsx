@@ -44,6 +44,8 @@ export default function App() {
       username: userData.username,
       roles: userData.roles,
       user_id: userData.user_id,
+      warehouse_id: userData.warehouse_id,
+      warehouse_name: userData.warehouse_name,
     });
     setActiveTab("penimbangan");
     localStorage.setItem("active_tab", "penimbangan");
@@ -107,9 +109,9 @@ export default function App() {
         {/* Main Content Area */}
         <main className="main-content">
           {activeTab === "penimbangan" ? (
-            <Dashboard userRole={user?.roles} operatorUsername={user?.username} />
+            <Dashboard userRole={user?.roles} operatorUsername={user?.username} userWarehouse={{ id: user?.warehouse_id, name: user?.warehouse_name }} />
           ) : (
-            <HistoryDashboard userRole={user?.roles} />
+            <HistoryDashboard userRole={user?.roles} userWarehouse={{ id: user?.warehouse_id, name: user?.warehouse_name }} />
           )}
         </main>
       </div>

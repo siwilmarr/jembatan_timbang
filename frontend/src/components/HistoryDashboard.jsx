@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../db/db";
 import { exportTransactionsToExcel } from "../utils/exportExcel";
 
-export default function HistoryDashboard({ userRole }) {
+export default function HistoryDashboard({ userRole, userWarehouse }) {
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingTx, setEditingTx] = useState(null);
@@ -10,32 +10,94 @@ export default function HistoryDashboard({ userRole }) {
     nomor_polisi: "",
     nama_driver: "",
     jenis_muatan: "",
+    tujuan: "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(null);
 
+  // Filter states
+  const [warehouses, setWarehouses] = useState([]);
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return today.toISOString().split("T")[0];
+  });
+  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+
+  // Reset states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetFilters, setResetFilters] = useState({
+    startDate: "",
+    endDate: "",
+    warehouseId: "",
+  });
+
   const isAdmin = userRole?.includes("Admin");
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
   const userToken = localStorage.getItem("user_token");
 
+  // Load warehouses list
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        if (navigator.onLine && userToken) {
+          const res = await fetch(`${API_BASE}/warehouses/`, {
+            headers: {
+              Authorization: `Token ${userToken}`,
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setWarehouses(data);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal mengambil data gudang:", err);
+      }
+    };
+    fetchWarehouses();
+  }, []);
+
   const loadHistory = async () => {
     try {
-      const startOfDay = new Date();
+      const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
       const startIso = startOfDay.toISOString();
 
-      // 1. Ambil data lokal terlebih dahulu dari IndexedDB untuk render cepat (offline-first)
-      const localRows = await db.weighing_transactions
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      const endIso = endOfDay.toISOString();
+
+      // 1. Ambil data lokal dari IndexedDB (offline-first)
+      let localRows = await db.weighing_transactions
         .where("created_at_local")
-        .above(startIso)
-        .reverse()
+        .between(startIso, endIso, true, true)
         .toArray();
+
+      if (selectedWarehouse) {
+        localRows = localRows.filter(
+          (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+        );
+      }
+
+      localRows.sort((a, b) => new Date(b.created_at_local) - new Date(a.created_at_local));
       setHistory(localRows);
 
       // 2. Jika online, lakukan sinkronisasi dua arah dengan server
       if (navigator.onLine && userToken) {
-        const res = await fetch(`${API_BASE}/weighing/?created_at_local_gte=${startIso}`, {
+        let url = `${API_BASE}/weighing/?created_at_local_gte=${startIso}&created_at_local_lte=${endIso}`;
+        if (selectedWarehouse) {
+          url += `&warehouse_id=${selectedWarehouse}`;
+        }
+
+        const res = await fetch(url, {
           headers: {
             Authorization: `Token ${userToken}`,
           },
@@ -47,11 +109,17 @@ export default function HistoryDashboard({ userRole }) {
           const serverIds = new Set(serverTxs.map((tx) => tx.id));
           const serverMap = new Map(serverTxs.map((tx) => [tx.id, tx]));
 
-          // Ambil ulang data lokal yang paling baru
-          const currentLocals = await db.weighing_transactions
+          // Ambil ulang data lokal yang paling baru di range & filter yang sama
+          let currentLocals = await db.weighing_transactions
             .where("created_at_local")
-            .above(startIso)
+            .between(startIso, endIso, true, true)
             .toArray();
+
+          if (selectedWarehouse) {
+            currentLocals = currentLocals.filter(
+              (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+            );
+          }
 
           // A. Proses transaksi lokal
           for (const localTx of currentLocals) {
@@ -60,13 +128,14 @@ export default function HistoryDashboard({ userRole }) {
             if (localTx.sync_status === "synced" && !serverIds.has(localTx.id)) {
               await db.weighing_transactions.delete(localTx.localId);
             }
-            // Jika ID-nya ada di server, perbarui data lokal dengan data server terbaru (misal jika diedit di server)
+            // Jika ID-nya ada di server, perbarui data lokal dengan data server terbaru
             else if (serverIds.has(localTx.id)) {
               const serverTx = serverMap.get(localTx.id);
               await db.weighing_transactions.update(localTx.localId, {
                 nomor_polisi: serverTx.nomor_polisi,
                 nama_driver: serverTx.nama_driver,
                 jenis_muatan: serverTx.jenis_muatan,
+                tujuan: serverTx.tujuan,
                 berat_kg: Number(serverTx.berat_kg),
                 berat_bersih_kg: serverTx.berat_bersih_kg ? Number(serverTx.berat_bersih_kg) : null,
                 sync_status: "synced",
@@ -83,10 +152,13 @@ export default function HistoryDashboard({ userRole }) {
                 nomor_polisi: serverTx.nomor_polisi,
                 nama_driver: serverTx.nama_driver,
                 jenis_muatan: serverTx.jenis_muatan,
+                tujuan: serverTx.tujuan,
                 jenis_timbang: serverTx.jenis_timbang,
                 berat_kg: Number(serverTx.berat_kg),
                 berat_bersih_kg: serverTx.berat_bersih_kg ? Number(serverTx.berat_bersih_kg) : null,
                 operator: serverTx.operator,
+                warehouse_id: serverTx.warehouse,
+                warehouse_name: serverTx.warehouse_name,
                 created_at_local: serverTx.created_at_local,
                 sync_status: "synced",
               });
@@ -94,11 +166,18 @@ export default function HistoryDashboard({ userRole }) {
           }
 
           // C. Muat ulang data terbaru dari IndexedDB setelah sinkronisasi selesai
-          const updatedRows = await db.weighing_transactions
+          let updatedRows = await db.weighing_transactions
             .where("created_at_local")
-            .above(startIso)
-            .reverse()
+            .between(startIso, endIso, true, true)
             .toArray();
+
+          if (selectedWarehouse) {
+            updatedRows = updatedRows.filter(
+              (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+            );
+          }
+
+          updatedRows.sort((a, b) => new Date(b.created_at_local) - new Date(a.created_at_local));
           setHistory(updatedRows);
         }
       }
@@ -109,9 +188,9 @@ export default function HistoryDashboard({ userRole }) {
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [startDate, endDate, selectedWarehouse]);
 
-  // Hitung statistik harian
+  // Hitung statistik berdasarkan data terpilih
   const totalCount = history.length;
   const totalGross = history
     .filter((tx) => tx.jenis_timbang === "gross")
@@ -128,7 +207,9 @@ export default function HistoryDashboard({ userRole }) {
     return (
       tx.nomor_polisi.toLowerCase().includes(term) ||
       tx.nama_driver.toLowerCase().includes(term) ||
-      (tx.jenis_muatan && tx.jenis_muatan.toLowerCase().includes(term))
+      (tx.jenis_muatan && tx.jenis_muatan.toLowerCase().includes(term)) ||
+      (tx.tujuan && tx.tujuan.toLowerCase().includes(term)) ||
+      (tx.warehouse_name && tx.warehouse_name.toLowerCase().includes(term))
     );
   });
 
@@ -167,7 +248,6 @@ export default function HistoryDashboard({ userRole }) {
         throw new Error(`Gagal menghapus data di server: ${res.status}`);
       }
 
-      // Hapus di IndexedDB lokal
       await db.weighing_transactions.delete(tx.localId);
       setSuccess("Transaksi berhasil dihapus.");
       loadHistory();
@@ -182,6 +262,7 @@ export default function HistoryDashboard({ userRole }) {
       nomor_polisi: tx.nomor_polisi,
       nama_driver: tx.nama_driver,
       jenis_muatan: tx.jenis_muatan || "",
+      tujuan: tx.tujuan || "",
     });
   };
 
@@ -221,11 +302,11 @@ export default function HistoryDashboard({ userRole }) {
 
       const updatedData = await res.json();
 
-      // Update di IndexedDB lokal
       await db.weighing_transactions.update(editingTx.localId, {
         nomor_polisi: updatedData.nomor_polisi,
         nama_driver: updatedData.nama_driver,
         jenis_muatan: updatedData.jenis_muatan,
+        tujuan: updatedData.tujuan,
       });
 
       setSuccess("Transaksi berhasil diperbarui.");
@@ -236,12 +317,136 @@ export default function HistoryDashboard({ userRole }) {
     }
   };
 
+  const handleResetDataClick = () => {
+    setResetFilters({
+      startDate: startDate,
+      endDate: endDate,
+      warehouseId: selectedWarehouse,
+    });
+    setShowResetModal(true);
+  };
+
+  const executeReset = async () => {
+    if (!navigator.onLine) {
+      setError("Reset data hanya dapat dilakukan saat online.");
+      setShowResetModal(false);
+      return;
+    }
+
+    if (!resetFilters.startDate || !resetFilters.endDate) {
+      setError("Tanggal mulai dan tanggal selesai wajib diisi untuk reset.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setIsResetting(true);
+
+    try {
+      const start = new Date(resetFilters.startDate);
+      start.setHours(0, 0, 0, 0);
+      const startIso = start.toISOString();
+
+      const end = new Date(resetFilters.endDate);
+      end.setHours(23, 59, 59, 999);
+      const endIso = end.toISOString();
+
+      const res = await fetch(`${API_BASE}/weighing/reset/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${userToken}`,
+        },
+        body: JSON.stringify({
+          created_at_local_gte: startIso,
+          created_at_local_lte: endIso,
+          warehouse_id: resetFilters.warehouseId || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || `Gagal me-reset data: ${res.status}`);
+      }
+
+      const resData = await res.json();
+
+      // Hapus di IndexedDB
+      let localTxs = await db.weighing_transactions
+        .where("created_at_local")
+        .between(startIso, endIso, true, true)
+        .toArray();
+
+      if (resetFilters.warehouseId) {
+        localTxs = localTxs.filter(
+          (tx) => tx.warehouse_id === resetFilters.warehouseId || tx.warehouse === resetFilters.warehouseId
+        );
+      }
+
+      for (const tx of localTxs) {
+        await db.weighing_transactions.delete(tx.localId);
+      }
+
+      setSuccess(`Berhasil me-reset data. Total ${resData.deleted_count} transaksi dihapus.`);
+      setShowResetModal(false);
+      loadHistory();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="history-dashboard">
       <header className="history-dashboard__header">
-        <h2>Dashboard Riwayat Harian</h2>
-        <p>Ringkasan dan data penimbangan hari ini</p>
+        <h2>Laporan & Riwayat Penimbangan</h2>
+        <p>Ringkasan dan data transaksi timbang terfilter</p>
       </header>
+
+      {/* Filter Laporan */}
+      <section className="history-dashboard__filters">
+        <label>
+          Dari Tanggal
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </label>
+        <label>
+          Sampai Tanggal
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </label>
+        <label>
+          Warehouse
+          <select
+            value={selectedWarehouse}
+            onChange={(e) => setSelectedWarehouse(e.target.value)}
+          >
+            <option value="">-- Semua Warehouse --</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn-reset-data"
+            onClick={handleResetDataClick}
+            style={{ alignSelf: "flex-end", height: "46px" }}
+          >
+            ⚠️ Reset Data Timbangan
+          </button>
+        )}
+      </section>
 
       {/* Ringkasan Statistik */}
       <section className="history-dashboard__stats">
@@ -263,20 +468,16 @@ export default function HistoryDashboard({ userRole }) {
         </div>
       </section>
 
-      {/* Kontrol Pencarian & Aksi Halaman */}
+      {/* Kontrol Pencarian & Ekspor */}
       <section className="history-dashboard__controls">
         <input
           type="text"
-          placeholder="Cari berdasarkan No. Polisi, Driver, atau Muatan..."
+          placeholder="Cari berdasarkan No. Polisi, Driver, Muatan, Tujuan, atau Warehouse..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="search-input"
         />
-        <button
-          type="button"
-          onClick={handleExport}
-          className="btn-export"
-        >
+        <button type="button" onClick={handleExport} className="btn-export">
           📁 Ekspor ke Excel
         </button>
       </section>
@@ -290,12 +491,14 @@ export default function HistoryDashboard({ userRole }) {
           <thead>
             <tr>
               <th>Waktu</th>
+              <th>Warehouse</th>
               <th>No. Polisi</th>
               <th>Nama Driver</th>
               <th>Jenis Timbang</th>
               <th>Berat (kg)</th>
               <th>Netto (kg)</th>
               <th>Muatan</th>
+              <th>Tujuan</th>
               <th>Operator</th>
               <th>Status</th>
               <th>Aksi</th>
@@ -304,14 +507,15 @@ export default function HistoryDashboard({ userRole }) {
           <tbody>
             {filteredHistory.length === 0 ? (
               <tr>
-                <td colSpan={10} className="text-center text-muted">
-                  Tidak ada data penimbangan untuk hari ini yang cocok.
+                <td colSpan={12} className="text-center text-muted">
+                  Tidak ada data penimbangan yang cocok dengan kriteria filter.
                 </td>
               </tr>
             ) : (
               filteredHistory.map((tx) => (
                 <tr key={tx.id}>
-                  <td>{new Date(tx.created_at_local).toLocaleTimeString("id-ID")}</td>
+                  <td>{new Date(tx.created_at_local).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="font-semibold">{tx.warehouse_name || "-"}</td>
                   <td className="font-semibold">{tx.nomor_polisi}</td>
                   <td>{tx.nama_driver}</td>
                   <td>
@@ -320,10 +524,9 @@ export default function HistoryDashboard({ userRole }) {
                     </span>
                   </td>
                   <td className="font-semibold">{tx.berat_kg} kg</td>
-                  <td>
-                    {tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}
-                  </td>
+                  <td>{tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}</td>
                   <td>{tx.jenis_muatan || "-"}</td>
+                  <td>{tx.tujuan || "-"}</td>
                   <td><span className="text-muted">{tx.operator || "device"}</span></td>
                   <td>
                     <span className={`sync-status-dot sync-status-dot--${tx.sync_status}`}>
@@ -401,6 +604,15 @@ export default function HistoryDashboard({ userRole }) {
                 />
               </label>
 
+              <label>
+                Tujuan
+                <input
+                  type="text"
+                  value={editForm.tujuan}
+                  onChange={(e) => setEditForm({ ...editForm, tujuan: e.target.value })}
+                />
+              </label>
+
               <div className="modal-actions">
                 <button type="button" onClick={() => setEditingTx(null)} className="btn-secondary">
                   Batal
@@ -414,9 +626,63 @@ export default function HistoryDashboard({ userRole }) {
         </div>
       )}
 
+      {/* Modal Reset Data */}
+      {showResetModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content">
+            <h3>⚠️ Reset Data Timbangan</h3>
+            <p style={{ color: "#ef4444", fontSize: "0.9rem", margin: "0.5rem 0 1.5rem 0", lineHeight: "1.4" }}>
+              Tindakan ini akan menghapus semua data transaksi timbang secara permanen di database lokal (IndexedDB) dan database server untuk kriteria filter di bawah.
+            </p>
+            <div className="modal-form">
+              <label>
+                Dari Tanggal
+                <input
+                  type="date"
+                  value={resetFilters.startDate}
+                  onChange={(e) => setResetFilters({ ...resetFilters, startDate: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Sampai Tanggal
+                <input
+                  type="date"
+                  value={resetFilters.endDate}
+                  onChange={(e) => setResetFilters({ ...resetFilters, endDate: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Warehouse
+                <select
+                  value={resetFilters.warehouseId}
+                  onChange={(e) => setResetFilters({ ...resetFilters, warehouseId: e.target.value })}
+                >
+                  <option value="">-- Semua Warehouse --</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="modal-actions" style={{ marginTop: "1rem" }}>
+                <button type="button" onClick={() => setShowResetModal(false)} className="btn-secondary" disabled={isResetting}>
+                  Batal
+                </button>
+                <button type="button" onClick={executeReset} className="btn-danger" disabled={isResetting}>
+                  {isResetting ? "Mengahapus..." : "Ya, Hapus Permanen"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Konfirmasi Kustom */}
       {confirmDialog && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
           <div className="modal-content text-center">
             <h3>{confirmDialog.title}</h3>
             <p style={{ margin: "1rem 0", color: "#475569", lineHeight: "1.5" }}>

@@ -1,10 +1,28 @@
 from rest_framework import serializers
-from .models import WeighingTransaction
+from .models import WeighingTransaction, Warehouse, Destination, Cargo
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehouse
+        fields = ["id", "name", "code"]
+
+
+class DestinationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Destination
+        fields = ["id", "name"]
+
+
+class CargoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cargo
+        fields = ["id", "name"]
 
 
 class WeighingTransactionSerializer(serializers.ModelSerializer):
-    # Override: id dari frontend HARUS writable, meski PK & editable=False di model
     id = serializers.UUIDField()
+    warehouse_name = serializers.ReadOnlyField(source="warehouse.name", default=None)
 
     class Meta:
         model = WeighingTransaction
@@ -13,11 +31,14 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
             "nomor_polisi",
             "nama_driver",
             "jenis_muatan",
+            "tujuan",
             "jenis_timbang",
             "berat_kg",
             "berat_bersih_kg",
             "pasangan",
             "operator",
+            "warehouse",
+            "warehouse_name",
             "created_at_local",
             "created_at_server",
             "sync_status",
@@ -29,6 +50,6 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
             id=validated_data["id"],
             defaults={**validated_data, "sync_status": "synced"},
         )
-        obj.try_pair()   # <-- tambahan: coba cari & hubungkan pasangan
-        obj.refresh_from_db()  # supaya response ke frontend sudah termasuk berat_bersih_kg terbaru
+        obj.try_pair()
+        obj.refresh_from_db()
         return obj

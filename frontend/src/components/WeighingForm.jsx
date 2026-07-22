@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { saveTransactionLocally } from "../db/db";
+import { saveTransactionLocally, db } from "../db/db";
 
 function getLocalISOString() {
   const date = new Date();
@@ -22,21 +22,61 @@ function getLocalISOString() {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}${diff}${timezoneHour}:${timezoneMinute}`;
 }
 
-export default function WeighingForm({ lockedWeight, operatorUsername, onSaved }) {
+export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, userWarehouse }) {
   const [form, setForm] = useState({
     nomor_polisi: "",
     nama_driver: "",
     jenis_muatan: "",
+    tujuan: "",
     jenis_timbang: "gross",
   });
 
-  // ADDED: guard double-submit. `isSubmitting` (state) dipakai untuk
-  // disable tombol secara visual, tapi state React di-batch/asinkron --
-  // dua klik yang sangat cepat bisa saja SAMA-SAMA lolos sebelum re-render
-  // sempat terjadi. `isSubmittingRef` adalah penjaga SINKRON: nilainya
-  // langsung berubah di baris kode yang sama, jadi klik kedua yang masuk
-  // sepersekian detik setelah klik pertama akan pasti tertolak, walau
-  // tombol di layar belum sempat terlihat disabled.
+  const [destinations, setDestinations] = useState([]);
+  const [cargos, setCargos] = useState([]);
+
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+  const userToken = localStorage.getItem("user_token");
+
+  // Ambil data master Tujuan dan Muatan (offline-first via IndexedDB, lalu sync dari server)
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        // 1. Load dari IndexedDB dulu (offline-first)
+        const localDest = await db.destinations.toArray();
+        const localCargo = await db.cargos.toArray();
+        if (localDest.length > 0) setDestinations(localDest);
+        if (localCargo.length > 0) setCargos(localCargo);
+
+        // 2. Jika online, update dari server
+        if (navigator.onLine && userToken) {
+          const [destRes, cargoRes] = await Promise.all([
+            fetch(`${API_BASE}/destinations/`, { headers: { Authorization: `Token ${userToken}` } }),
+            fetch(`${API_BASE}/cargos/`, { headers: { Authorization: `Token ${userToken}` } }),
+          ]);
+
+          if (destRes.ok) {
+            const destData = await destRes.json();
+            const destList = Array.isArray(destData) ? destData : (destData.results || []);
+            await db.destinations.clear();
+            if (destList.length > 0) await db.destinations.bulkAdd(destList);
+            setDestinations(destList);
+          }
+
+          if (cargoRes.ok) {
+            const cargoData = await cargoRes.json();
+            const cargoList = Array.isArray(cargoData) ? cargoData : (cargoData.results || []);
+            await db.cargos.clear();
+            if (cargoList.length > 0) await db.cargos.bulkAdd(cargoList);
+            setCargos(cargoList);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal memuat data master:", err);
+      }
+    };
+    fetchMasterData();
+  }, []);
+
   const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,24 +96,29 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved }
         id: uuidv4(), ...form,
         berat_kg: lockedWeight,
         operator: operatorUsername || "device",
+        warehouse: userWarehouse?.id || null,
+        warehouse_id: userWarehouse?.id || null,
+        warehouse_name: userWarehouse?.name || null,
         created_at_local: getLocalISOString()
       };
       await saveTransactionLocally(newTx);
 
-      setForm({ nomor_polisi: "", nama_driver: "", jenis_muatan: "", jenis_timbang: "gross" });
+      setForm({ nomor_polisi: "", nama_driver: "", jenis_muatan: "", tujuan: "", jenis_timbang: "gross" });
       onSaved?.(newTx);
     } finally {
-      // Reset guard SETELAH selesai (bukan sebelum), supaya tidak ada
-      // celah waktu di mana klik berikutnya bisa nyelip masuk lagi.
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
-
-
   return (
     <form className="weighing-form" onSubmit={handleSubmit}>
+      {userWarehouse?.name && (
+        <div className="weighing-form__warehouse-badge">
+          🏭 Warehouse: <strong>{userWarehouse.name}</strong>
+        </div>
+      )}
+
       <label>
         Nomor Polisi
         <input name="nomor_polisi" value={form.nomor_polisi} onChange={handleChange} required />
@@ -86,7 +131,30 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved }
 
       <label>
         Jenis Muatan
-        <input name="jenis_muatan" value={form.jenis_muatan} onChange={handleChange} />
+        {cargos.length > 0 ? (
+          <select name="jenis_muatan" value={form.jenis_muatan} onChange={handleChange}>
+            <option value="">-- Pilih Muatan --</option>
+            {cargos.map((c) => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
+          </select>
+        ) : (
+          <input name="jenis_muatan" value={form.jenis_muatan} onChange={handleChange} placeholder="Ketik jenis muatan" />
+        )}
+      </label>
+
+      <label>
+        Tujuan
+        {destinations.length > 0 ? (
+          <select name="tujuan" value={form.tujuan} onChange={handleChange}>
+            <option value="">-- Pilih Tujuan --</option>
+            {destinations.map((d) => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+        ) : (
+          <input name="tujuan" value={form.tujuan} onChange={handleChange} placeholder="Ketik tujuan" />
+        )}
       </label>
 
       <label>

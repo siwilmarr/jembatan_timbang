@@ -18,7 +18,7 @@
       }
     },
     {
-      "source": "/admin(/.*)?",
+      "source": "/django-admin(/.*)?",
       "destination": {
         "type": "service",
         "service": "backend"

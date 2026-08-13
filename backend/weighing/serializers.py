@@ -3,10 +3,18 @@ from django.contrib.auth.models import User, Group
 from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile
 
 
+from django.utils.html import strip_tags
+
 class WarehouseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Warehouse
         fields = ["id", "name", "code"]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
+
+    def validate_code(self, value):
+        return strip_tags(value).strip() if value else value
 
 
 class DestinationSerializer(serializers.ModelSerializer):
@@ -14,11 +22,17 @@ class DestinationSerializer(serializers.ModelSerializer):
         model = Destination
         fields = ["id", "name"]
 
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
+
 
 class CargoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cargo
         fields = ["id", "name"]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
 
 
 class WeighingTransactionSerializer(serializers.ModelSerializer):
@@ -45,6 +59,14 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
             "sync_status",
         ]
         read_only_fields = ["created_at_server", "sync_status", "berat_bersih_kg", "pasangan"]
+
+    def validate(self, attrs):
+        # Sanitize all incoming string input fields from potential XSS injection
+        string_fields = ["nomor_polisi", "nama_driver", "jenis_muatan", "tujuan", "operator"]
+        for field in string_fields:
+            if field in attrs and isinstance(attrs[field], str):
+                attrs[field] = strip_tags(attrs[field]).strip()
+        return attrs
 
     def create(self, validated_data):
         obj, _created = WeighingTransaction.objects.update_or_create(

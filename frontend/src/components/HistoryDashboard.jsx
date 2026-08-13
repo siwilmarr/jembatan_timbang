@@ -72,8 +72,26 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
   const loadHistory = async () => {
     try {
-      // Helper: buat ISO string menggunakan offset timezone lokal
-      // agar konsisten dengan format created_at_local yang tersimpan
+      // Helper: parse date safely to avoid Safari Date parser bugs
+      const parseDateSafely = (dateStr, isEnd) => {
+        if (!dateStr) return new Date();
+        const parts = dateStr.split("-");
+        if (parts.length !== 3) return new Date();
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        if (isEnd) {
+          return new Date(year, month, day, 23, 59, 59, 999);
+        }
+        return new Date(year, month, day, 0, 0, 0, 0);
+      };
+
+      const startOfDay = parseDateSafely(startDate, false);
+      const endOfDay = parseDateSafely(endDate, true);
+      const startMs = startOfDay.getTime();
+      const endMs = endOfDay.getTime();
+
+      // Helper untuk format ISO ISO lokal jika diperlukan oleh API
       const padZ = (n, len = 2) => String(n).padStart(len, "0");
       const getLocalISO = (date) => {
         const off = -date.getTimezoneOffset();
@@ -92,19 +110,16 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
         );
       };
 
-      const startOfDay = new Date(startDate);
-      startOfDay.setHours(0, 0, 0, 0);
       const startIso = getLocalISO(startOfDay);
-
-      const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999);
       const endIso = getLocalISO(endOfDay);
 
-      // 1. Ambil data lokal dari IndexedDB (offline-first)
-      let localRows = await db.weighing_transactions
-        .where("created_at_local")
-        .between(startIso, endIso, true, true)
-        .toArray();
+      // 1. Ambil data lokal dari IndexedDB (offline-first) dan filter di memori secara aman
+      const allLocalRows = await db.weighing_transactions.toArray();
+      let localRows = allLocalRows.filter((tx) => {
+        const txDate = new Date(tx.created_at_local);
+        const txMs = txDate.getTime();
+        return txMs >= startMs && txMs <= endMs;
+      });
 
       if (selectedWarehouse) {
         localRows = localRows.filter(
@@ -135,10 +150,12 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
           const serverMap = new Map(serverTxs.map((tx) => [tx.id, tx]));
 
           // Ambil ulang data lokal yang paling baru di range & filter yang sama
-          let currentLocals = await db.weighing_transactions
-            .where("created_at_local")
-            .between(startIso, endIso, true, true)
-            .toArray();
+          const allCurrentLocals = await db.weighing_transactions.toArray();
+          let currentLocals = allCurrentLocals.filter((tx) => {
+            const txDate = new Date(tx.created_at_local);
+            const txMs = txDate.getTime();
+            return txMs >= startMs && txMs <= endMs;
+          });
 
           if (selectedWarehouse) {
             currentLocals = currentLocals.filter(
@@ -191,10 +208,12 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
           }
 
           // C. Muat ulang data terbaru dari IndexedDB setelah sinkronisasi selesai
-          let updatedRows = await db.weighing_transactions
-            .where("created_at_local")
-            .between(startIso, endIso, true, true)
-            .toArray();
+          const allUpdatedRows = await db.weighing_transactions.toArray();
+          let updatedRows = allUpdatedRows.filter((tx) => {
+            const txDate = new Date(tx.created_at_local);
+            const txMs = txDate.getTime();
+            return txMs >= startMs && txMs <= endMs;
+          });
 
           if (selectedWarehouse) {
             updatedRows = updatedRows.filter(

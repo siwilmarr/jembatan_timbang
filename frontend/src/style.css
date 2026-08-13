@@ -688,6 +688,17 @@ select:focus {
   border: none;
   padding: 0;
   cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-toggle-password:focus,
+.btn-toggle-password:active,
+.btn-toggle-password:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 /* === History Dashboard === */

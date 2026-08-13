@@ -1,13 +1,9 @@
 import { getPendingTransactions, markAsSynced } from "../db/db";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+import { API_BASE_URL, DEVICE_API_TOKEN } from "../config/env";
 
-// ADDED: token per-device untuk autentikasi ke backend (lihat settings.py:
-// REST_FRAMEWORK DEFAULT_AUTHENTICATION_CLASSES = TokenAuthentication).
-// Nilainya WAJIB diisi di file .env masing-masing device/kios lewat:
-//   VITE_DEVICE_API_TOKEN=<token yang dibuat lewat Django admin>
-// Cara membuat token: lihat catatan setup di akhir pesan.
-const API_TOKEN = import.meta.env.VITE_DEVICE_API_TOKEN;
+const API_BASE = API_BASE_URL;
+const API_TOKEN = DEVICE_API_TOKEN;
 
 // ADDED: mutex sederhana untuk cegah beberapa sync berjalan bersamaan.
 // syncPendingTransactions() bisa dipicu dari banyak sumber di saat yang

@@ -1,7 +1,10 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { useSerial } from "../hooks/useSerial";
 import { getPendingTransactions } from "../db/db";
 import { syncPendingTransactions } from "../services/syncService";
+import { APP_MODE } from "../config/env";
 import WeighingForm from "./WeighingForm";
 import SyncStatus from "./SyncStatus";
 import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
@@ -112,7 +115,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
               {isStable ? "● Stabil" : "○ Mengukur..."}
             </span>
             <span className="badge badge--info">
-              Mode: {import.meta.env.VITE_APP_MODE === "demo" ? "Demo" : "Production"}
+              Mode: {APP_MODE === "demo" ? "Demo" : "Production"}
             </span>
             <span className={`badge ${isOnline ? "badge--success" : "badge--danger"}`}>
               {isOnline ? "Online" : "Offline"}

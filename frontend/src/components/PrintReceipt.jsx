@@ -1,3 +1,5 @@
+"use client";
+
 // frontend/src/components/PrintReceipt.jsx
 export default function PrintReceipt({ transaction }) {
   if (!transaction) return null;

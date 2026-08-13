@@ -1,6 +1,9 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { db } from "../db/db";
 import { exportTransactionsToExcel } from "../utils/exportExcel";
+import { API_BASE_URL } from "../config/env";
 
 export default function HistoryDashboard({ userRole, userWarehouse }) {
   const [history, setHistory] = useState([]);
@@ -29,6 +32,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     return today.toISOString().split("T")[0];
   });
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [activeTabType, setActiveTabType] = useState("detail"); // "detail" atau "summary"
+  const [groupByField, setGroupByField] = useState("warehouse_name"); // "warehouse_name", "jenis_muatan", "tujuan", "operator"
 
   // Reset states
   const [showResetModal, setShowResetModal] = useState(false);
@@ -40,8 +45,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
   });
 
   const isAdmin = userRole?.includes("Admin");
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
-  const userToken = localStorage.getItem("user_token");
+  const API_BASE = API_BASE_URL;
+  const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
 
   // Load warehouses list
   useEffect(() => {
@@ -67,13 +72,33 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
   const loadHistory = async () => {
     try {
+      // Helper: buat ISO string menggunakan offset timezone lokal
+      // agar konsisten dengan format created_at_local yang tersimpan
+      const padZ = (n, len = 2) => String(n).padStart(len, "0");
+      const getLocalISO = (date) => {
+        const off = -date.getTimezoneOffset();
+        const sign = off >= 0 ? "+" : "-";
+        const hh = padZ(Math.floor(Math.abs(off) / 60));
+        const mm = padZ(Math.abs(off) % 60);
+        return (
+          date.getFullYear() +
+          "-" + padZ(date.getMonth() + 1) +
+          "-" + padZ(date.getDate()) +
+          "T" + padZ(date.getHours()) +
+          ":" + padZ(date.getMinutes()) +
+          ":" + padZ(date.getSeconds()) +
+          "." + padZ(date.getMilliseconds(), 3) +
+          sign + hh + ":" + mm
+        );
+      };
+
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
-      const startIso = startOfDay.toISOString();
+      const startIso = getLocalISO(startOfDay);
 
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
-      const endIso = endOfDay.toISOString();
+      const endIso = getLocalISO(endOfDay);
 
       // 1. Ambil data lokal dari IndexedDB (offline-first)
       let localRows = await db.weighing_transactions
@@ -83,7 +108,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
       if (selectedWarehouse) {
         localRows = localRows.filter(
-          (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+          (tx) => tx.warehouse_id == selectedWarehouse || tx.warehouse == selectedWarehouse
         );
       }
 
@@ -117,7 +142,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
           if (selectedWarehouse) {
             currentLocals = currentLocals.filter(
-              (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+              (tx) => tx.warehouse_id == selectedWarehouse || tx.warehouse == selectedWarehouse
             );
           }
 
@@ -147,7 +172,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
           const localIds = new Set(currentLocals.map((tx) => tx.id));
           for (const serverTx of serverTxs) {
             if (!localIds.has(serverTx.id)) {
-              await db.weighing_transactions.add({
+              await db.weighing_transactions.put({
                 id: serverTx.id,
                 nomor_polisi: serverTx.nomor_polisi,
                 nama_driver: serverTx.nama_driver,
@@ -173,7 +198,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
           if (selectedWarehouse) {
             updatedRows = updatedRows.filter(
-              (tx) => tx.warehouse_id === selectedWarehouse || tx.warehouse === selectedWarehouse
+              (tx) => tx.warehouse_id == selectedWarehouse || tx.warehouse == selectedWarehouse
             );
           }
 
@@ -244,7 +269,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
         },
       });
 
-      if (!res.ok) {
+      // 204 No Content = berhasil dihapus
+      // 404 Not Found  = data sudah tidak ada di server (tetap anggap sukses)
+      if (!res.ok && res.status !== 404) {
         throw new Error(`Gagal menghapus data di server: ${res.status}`);
       }
 
@@ -343,13 +370,33 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     setIsResetting(true);
 
     try {
+      // Gunakan helper getLocalISO yang sama dengan loadHistory
+      // agar format timezone konsisten dengan created_at_local di DB
+      const padZ = (n, len = 2) => String(n).padStart(len, "0");
+      const getLocalISO = (date) => {
+        const off = -date.getTimezoneOffset();
+        const sign = off >= 0 ? "+" : "-";
+        const hh = padZ(Math.floor(Math.abs(off) / 60));
+        const mm = padZ(Math.abs(off) % 60);
+        return (
+          date.getFullYear() +
+          "-" + padZ(date.getMonth() + 1) +
+          "-" + padZ(date.getDate()) +
+          "T" + padZ(date.getHours()) +
+          ":" + padZ(date.getMinutes()) +
+          ":" + padZ(date.getSeconds()) +
+          "." + padZ(date.getMilliseconds(), 3) +
+          sign + hh + ":" + mm
+        );
+      };
+
       const start = new Date(resetFilters.startDate);
       start.setHours(0, 0, 0, 0);
-      const startIso = start.toISOString();
+      const startIso = getLocalISO(start);
 
       const end = new Date(resetFilters.endDate);
       end.setHours(23, 59, 59, 999);
-      const endIso = end.toISOString();
+      const endIso = getLocalISO(end);
 
       const res = await fetch(`${API_BASE}/weighing/reset/`, {
         method: "POST",
@@ -371,7 +418,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
       const resData = await res.json();
 
-      // Hapus di IndexedDB
+      // Hapus di IndexedDB (gunakan format lokal yang sama)
       let localTxs = await db.weighing_transactions
         .where("created_at_local")
         .between(startIso, endIso, true, true)
@@ -379,7 +426,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
       if (resetFilters.warehouseId) {
         localTxs = localTxs.filter(
-          (tx) => tx.warehouse_id === resetFilters.warehouseId || tx.warehouse === resetFilters.warehouseId
+          (tx) => tx.warehouse_id == resetFilters.warehouseId || tx.warehouse == resetFilters.warehouseId
         );
       }
 
@@ -397,12 +444,69 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     }
   };
 
+  const getSummaryData = () => {
+    const summaryMap = {};
+    history.forEach((tx) => {
+      let key = "";
+      if (groupByField === "warehouse_name") {
+        key = tx.warehouse_name || "Tanpa Gudang";
+      } else if (groupByField === "jenis_muatan") {
+        key = tx.jenis_muatan || "Tanpa Muatan";
+      } else if (groupByField === "tujuan") {
+        key = tx.tujuan || "Tanpa Tujuan";
+      } else if (groupByField === "operator") {
+        key = tx.operator || "device";
+      }
+
+      if (!summaryMap[key]) {
+        summaryMap[key] = {
+          category: key,
+          count: 0,
+          gross: 0,
+          tare: 0,
+          netto: 0,
+        };
+      }
+
+      summaryMap[key].count += 1;
+      const berat = parseFloat(tx.berat_kg || 0);
+      if (tx.jenis_timbang === "gross") {
+        summaryMap[key].gross += berat;
+      } else if (tx.jenis_timbang === "tare") {
+        summaryMap[key].tare += berat;
+      }
+
+      if (tx.berat_bersih_kg) {
+        summaryMap[key].netto += parseFloat(tx.berat_bersih_kg);
+      }
+    });
+    return Object.values(summaryMap);
+  };
+
   return (
     <div className="history-dashboard">
       <header className="history-dashboard__header">
         <h2>Laporan & Riwayat Penimbangan</h2>
         <p>Ringkasan dan data transaksi timbang terfilter</p>
       </header>
+
+      {/* Sub Tab Laporan */}
+      <div className="navbar__tabs" style={{ marginBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.5rem" }}>
+        <button
+          type="button"
+          className={`navbar__tab ${activeTabType === "detail" ? "navbar__tab--active" : ""}`}
+          onClick={() => setActiveTabType("detail")}
+        >
+          📋 Detail Transaksi
+        </button>
+        <button
+          type="button"
+          className={`navbar__tab ${activeTabType === "summary" ? "navbar__tab--active" : ""}`}
+          onClick={() => setActiveTabType("summary")}
+        >
+          📊 Ringkasan (Summary)
+        </button>
+      </div>
 
       {/* Filter Laporan */}
       <section className="history-dashboard__filters">
@@ -436,6 +540,20 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
             ))}
           </select>
         </label>
+        {activeTabType === "summary" && (
+          <label>
+            Kelompokkan Berdasarkan
+            <select
+              value={groupByField}
+              onChange={(e) => setGroupByField(e.target.value)}
+            >
+              <option value="warehouse_name">Warehouse (Gudang)</option>
+              <option value="jenis_muatan">Jenis Muatan</option>
+              <option value="tujuan">Tujuan</option>
+              <option value="operator">Operator</option>
+            </select>
+          </label>
+        )}
         {isAdmin && (
           <button
             type="button"
@@ -468,106 +586,161 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
         </div>
       </section>
 
-      {/* Kontrol Pencarian & Ekspor */}
-      <section className="history-dashboard__controls">
-        <input
-          type="text"
-          placeholder="Cari berdasarkan No. Polisi, Driver, Muatan, Tujuan, atau Warehouse..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
-        <button type="button" onClick={handleExport} className="btn-export">
-          📁 Ekspor ke Excel
-        </button>
-      </section>
-
       {error && <div className="alert alert--error">{error}</div>}
       {success && <div className="alert alert--success">{success}</div>}
 
-      {/* Tabel Data */}
-      <section className="history-dashboard__table-container">
-        <table className="history-table">
-          <thead>
-            <tr>
-              <th>Waktu</th>
-              <th>Warehouse</th>
-              <th>No. Polisi</th>
-              <th>Nama Driver</th>
-              <th>Jenis Timbang</th>
-              <th>Berat (kg)</th>
-              <th>Netto (kg)</th>
-              <th>Muatan</th>
-              <th>Tujuan</th>
-              <th>Operator</th>
-              <th>Status</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredHistory.length === 0 ? (
+      {activeTabType === "summary" ? (
+        /* Tabel Summary (Agregasi) */
+        <section className="history-dashboard__table-container">
+          <table className="history-table">
+            <thead>
               <tr>
-                <td colSpan={12} className="text-center text-muted">
-                  Tidak ada data penimbangan yang cocok dengan kriteria filter.
-                </td>
+                <th>Kategori ({groupByField === "warehouse_name" ? "Warehouse" : groupByField === "jenis_muatan" ? "Jenis Muatan" : groupByField === "tujuan" ? "Tujuan" : "Operator"})</th>
+                <th>Jumlah Transaksi</th>
+                <th>Total Gross</th>
+                <th>Total Tare</th>
+                <th>Total Netto</th>
+                <th style={{ width: "200px" }}>Proporsi Netto</th>
               </tr>
-            ) : (
-              filteredHistory.map((tx) => (
-                <tr key={tx.id}>
-                  <td>{new Date(tx.created_at_local).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</td>
-                  <td className="font-semibold">{tx.warehouse_name || "-"}</td>
-                  <td className="font-semibold">{tx.nomor_polisi}</td>
-                  <td>{tx.nama_driver}</td>
-                  <td>
-                    <span className={`badge-type badge-type--${tx.jenis_timbang}`}>
-                      {tx.jenis_timbang === "gross" ? "Gross" : "Tare"}
-                    </span>
-                  </td>
-                  <td className="font-semibold">{tx.berat_kg} kg</td>
-                  <td>{tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}</td>
-                  <td>{tx.jenis_muatan || "-"}</td>
-                  <td>{tx.tujuan || "-"}</td>
-                  <td><span className="text-muted">{tx.operator || "device"}</span></td>
-                  <td>
-                    <span className={`sync-status-dot sync-status-dot--${tx.sync_status}`}>
-                      {tx.sync_status === "synced" ? "Tersinkron" : "Lokal"}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="table-actions">
-                      <button
-                        type="button"
-                        onClick={() => window.printTransaction?.(tx)}
-                        className="btn-table-print"
-                      >
-                        Cetak
-                      </button>
-                      {isAdmin && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleEditClick(tx)}
-                            className="btn-table-edit"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(tx)}
-                            className="btn-table-delete"
-                          >
-                            Hapus
-                          </button>
-                        </>
-                      )}
-                    </div>
+            </thead>
+            <tbody>
+              {getSummaryData().length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted">
+                    Tidak ada data ringkasan untuk filter yang dipilih.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </section>
+              ) : (
+                (() => {
+                  const summaryList = getSummaryData();
+                  const grandTotalNetto = summaryList.reduce((sum, item) => sum + item.netto, 0);
+                  
+                  return summaryList.map((item, idx) => {
+                    const percentage = grandTotalNetto > 0 ? ((item.netto / grandTotalNetto) * 100).toFixed(1) : 0;
+                    return (
+                      <tr key={idx}>
+                        <td className="font-semibold">{item.category}</td>
+                        <td>{item.count} timbangan</td>
+                        <td>{item.gross.toLocaleString("id-ID")} kg</td>
+                        <td>{item.tare.toLocaleString("id-ID")} kg</td>
+                        <td className="font-semibold">{item.netto.toLocaleString("id-ID")} kg</td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div style={{ flex: 1, height: "8px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${percentage}%`, background: "#2563eb", borderRadius: "999px" }}></div>
+                            </div>
+                            <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "#475569", minWidth: "40px" }}>{percentage}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()
+              )}
+            </tbody>
+          </table>
+        </section>
+      ) : (
+        /* Tabel Detail (Transaksi Per Baris) */
+        <>
+          {/* Kontrol Pencarian & Ekspor */}
+          <section className="history-dashboard__controls">
+            <input
+              type="text"
+              placeholder="Cari berdasarkan No. Polisi, Driver, Muatan, Tujuan, atau Warehouse..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+            <button type="button" onClick={handleExport} className="btn-export">
+              📁 Ekspor ke Excel
+            </button>
+          </section>
+
+          <section className="history-dashboard__table-container">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>Waktu</th>
+                  <th>Warehouse</th>
+                  <th>No. Polisi</th>
+                  <th>Nama Driver</th>
+                  <th>Jenis Timbang</th>
+                  <th>Berat (kg)</th>
+                  <th>Netto (kg)</th>
+                  <th>Muatan</th>
+                  <th>Tujuan</th>
+                  <th>Operator</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} className="text-center text-muted">
+                      Tidak ada data penimbangan yang cocok dengan kriteria filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredHistory.map((tx) => (
+                    <tr key={tx.id}>
+                      <td>{new Date(tx.created_at_local).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</td>
+                      <td className="font-semibold">{tx.warehouse_name || "-"}</td>
+                      <td className="font-semibold">{tx.nomor_polisi}</td>
+                      <td>{tx.nama_driver}</td>
+                      <td>
+                        <span className={`badge-type badge-type--${tx.jenis_timbang}`}>
+                          {tx.jenis_timbang === "gross" ? "Gross" : "Tare"}
+                        </span>
+                      </td>
+                      <td className="font-semibold">{tx.berat_kg} kg</td>
+                      <td>{tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}</td>
+                      <td>{tx.jenis_muatan || "-"}</td>
+                      <td>{tx.tujuan || "-"}</td>
+                      <td><span className="text-muted">{tx.operator || "device"}</span></td>
+                      <td>
+                        <span className={`sync-status-dot sync-status-dot--${tx.sync_status}`}>
+                          {tx.sync_status === "synced" ? "Tersinkron" : "Lokal"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            onClick={() => window.printTransaction?.(tx)}
+                            className="btn-table-print"
+                          >
+                            Cetak
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleEditClick(tx)}
+                                className="btn-table-edit"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(tx)}
+                                className="btn-table-delete"
+                              >
+                                Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </section>
+        </>
+      )}
 
       {/* Modal Edit */}
       {editingTx && (

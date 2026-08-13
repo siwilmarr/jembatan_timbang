@@ -1,0 +1,10 @@
+{
+  "name": "Jembatan Timbang",
+  "short_name": "Timbang",
+  "description": "Aplikasi hybrid PWA untuk input dan sinkronisasi timbangan.",
+  "theme_color": "#0f4c81",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": []
+}

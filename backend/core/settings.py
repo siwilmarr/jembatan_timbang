@@ -107,6 +107,20 @@ else:
         }
     }
 
+# Muat konfigurasi database kustom jika ada file database_config.json
+import os
+import json
+config_path = os.path.join(BASE_DIR, "database_config.json")
+if os.path.exists(config_path):
+    try:
+        with open(config_path, "r") as f:
+            custom_db = json.load(f)
+            DATABASES = {
+                "default": custom_db
+            }
+    except Exception as e:
+        print(f"Gagal memuat database_config.json saat startup: {e}")
+
 # Pastikan file sqlite bisa dibuat (mengatasi error: unable to open database file)
 if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     db_name = Path(DATABASES["default"]["NAME"])
@@ -169,3 +183,5 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+# Trigger reload to load new env vars for CORS

@@ -1,6 +1,9 @@
+"use client";
+
 import { useRef, useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { saveTransactionLocally, db } from "../db/db";
+import { API_BASE_URL } from "../config/env";
 
 function getLocalISOString() {
   const date = new Date();
@@ -34,8 +37,8 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
   const [destinations, setDestinations] = useState([]);
   const [cargos, setCargos] = useState([]);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
-  const userToken = localStorage.getItem("user_token");
+  const API_BASE = API_BASE_URL;
+  const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
 
   // Ambil data master Tujuan dan Muatan (offline-first via IndexedDB, lalu sync dari server)
   useEffect(() => {

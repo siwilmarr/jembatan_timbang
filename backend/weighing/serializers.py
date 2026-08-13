@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import WeighingTransaction, Warehouse, Destination, Cargo
+from django.contrib.auth.models import User, Group
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile
 
 
 class WarehouseSerializer(serializers.ModelSerializer):
@@ -53,3 +54,79 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
         obj.try_pair()
         obj.refresh_from_db()
         return obj
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    warehouse_name = serializers.ReadOnlyField(source="warehouse.name", default=None)
+
+    class Meta:
+        model = UserProfile
+        fields = ["warehouse", "warehouse_name"]
+
+
+class UserSerializer(serializers.ModelSerializer):
+    roles = serializers.SerializerMethodField()
+    roles_write = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    profile = UserProfileSerializer(required=False)
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "password", "email", "first_name", "last_name", "roles", "roles_write", "profile"]
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False}
+        }
+
+    def get_roles(self, obj):
+        roles = list(obj.groups.values_list('name', flat=True))
+        if obj.is_superuser and "Admin" not in roles:
+            roles.append("Admin")
+        return roles
+
+    def create(self, validated_data):
+        profile_data = validated_data.pop("profile", None)
+        roles_data = validated_data.pop("roles_write", None)
+        password = validated_data.pop("password", None)
+        
+        user = User.objects.create(**validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+            
+        if roles_data is not None:
+            user.groups.clear()
+            for role_name in roles_data:
+                group, _ = Group.objects.get_or_create(name=role_name)
+                user.groups.add(group)
+                
+        if profile_data:
+            UserProfile.objects.create(user=user, **profile_data)
+        else:
+            UserProfile.objects.create(user=user)
+        return user
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", None)
+        roles_data = validated_data.pop("roles_write", None)
+        password = validated_data.pop("password", None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        if roles_data is not None:
+            instance.groups.clear()
+            for role_name in roles_data:
+                group, _ = Group.objects.get_or_create(name=role_name)
+                instance.groups.add(group)
+
+        if profile_data is not None:
+            profile = getattr(instance, 'profile', None)
+            if not profile:
+                profile = UserProfile.objects.create(user=instance)
+            profile.warehouse = profile_data.get("warehouse", profile.warehouse)
+            profile.save()
+            
+        return instance

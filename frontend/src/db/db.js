@@ -2,19 +2,36 @@ import Dexie from "dexie";
 
 // Database lokal (offline-first). Ini adalah "sumber kebenaran sementara"
 // sebelum data berhasil disinkronkan ke server Django.
-export const db = new Dexie("jembatan_timbang_db");
+//
+// Guard SSR: Dexie membutuhkan indexedDB yang hanya ada di browser.
+// Saat dijalankan di sisi server (Next.js SSR/build), kita buat instance
+// kosong agar import tidak crash.
+let db;
 
-db.version(1).stores({
-  weighing_transactions:
-    "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local",
-});
+if (typeof window !== "undefined") {
+  db = new Dexie("jembatan_timbang_db");
 
-db.version(2).stores({
-  weighing_transactions:
-    "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
-  destinations: "++id, name",
-  cargos: "++id, name",
-});
+  db.version(1).stores({
+    weighing_transactions:
+      "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local",
+  });
+
+  db.version(2).stores({
+    weighing_transactions:
+      "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
+    destinations: "++id, name",
+    cargos: "++id, name",
+  });
+} else {
+  // Placeholder agar import di SSR tidak crash
+  db = {
+    weighing_transactions: { add: async () => {}, where: () => ({ equals: () => ({ toArray: async () => [] }), above: () => ({ reverse: () => ({ toArray: async () => [] }) }), between: () => ({ toArray: async () => [] }) }), put: async () => {}, delete: async () => {}, toArray: async () => [] },
+    destinations: { toArray: async () => [], bulkPut: async () => {} },
+    cargos: { toArray: async () => [], bulkPut: async () => {} },
+  };
+}
+
+export { db };
 
 /**
  * Simpan transaksi baru ke IndexedDB terlebih dahulu.
@@ -22,7 +39,6 @@ db.version(2).stores({
  * yang bertanggung jawab mengirim ke server (lihat services/syncService.js).
  */
 export async function saveTransactionLocally(transaction) {
-
   return db.weighing_transactions.add({
     ...transaction,
     sync_status: "pending",

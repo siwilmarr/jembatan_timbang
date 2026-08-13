@@ -1,3 +1,5 @@
+"use client";
+
 export default function SyncStatus({ pendingCount }) {
   const statusType = pendingCount === 0 ? "green" : pendingCount < 10 ? "yellow" : "red";
   const label = pendingCount === 0 ? "Semua data tersinkron" : `${pendingCount} data menunggu sinkronisasi`;

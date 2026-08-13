@@ -21,3 +21,28 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         # 4. Metode perubahan (PUT, PATCH, DELETE) dibatasi hanya untuk Admin / Superuser
         is_admin = request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
         return is_admin
+
+
+class IsAdminOrReadOnlyMaster(permissions.BasePermission):
+    """
+    Custom permission to only allow Admins to perform write operations on master data.
+    All authenticated users can perform read operations (SAFE_METHODS).
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        is_admin = request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return is_admin
+
+
+class IsAdminUserOnly(permissions.BasePermission):
+    """
+    Custom permission to only allow Admins/Superusers access to user management APIs.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        is_admin = request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+        return is_admin

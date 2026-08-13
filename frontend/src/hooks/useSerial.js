@@ -1,7 +1,9 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import CasSimulator from "../simulator/CasSimulator";
 
-const APP_MODE = import.meta.env.VITE_APP_MODE || "demo";
+import { APP_MODE } from "../config/env";
 const MAX_DEBUG_ENTRIES = 50;
 
 /**

@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "jembatan_timbang_serial_config";

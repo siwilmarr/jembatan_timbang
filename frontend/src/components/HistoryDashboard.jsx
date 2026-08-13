@@ -638,7 +638,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                 (() => {
                   const summaryList = getSummaryData();
                   const grandTotalNetto = summaryList.reduce((sum, item) => sum + item.netto, 0);
-                  
+
                   return summaryList.map((item, idx) => {
                     const percentage = grandTotalNetto > 0 ? ((item.netto / grandTotalNetto) * 100).toFixed(1) : 0;
                     return (

@@ -688,11 +688,6 @@ select:focus {
   border: none;
   padding: 0;
   cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.btn-toggle-password:hover {
-  color: #0f172a;
 }
 
 /* === History Dashboard === */

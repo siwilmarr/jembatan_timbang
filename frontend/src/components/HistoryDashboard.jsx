@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../db/db";
 import { exportTransactionsToExcel } from "../utils/exportExcel";
+import { exportTransactionsToPdf } from "../utils/exportPdf";
 import { API_BASE_URL } from "../config/env";
 
 export default function HistoryDashboard({ userRole, userWarehouse }) {
@@ -259,6 +260,10 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
   const handleExport = () => {
     exportTransactionsToExcel(history);
+  };
+
+  const handleExportPdf = () => {
+    exportTransactionsToPdf(history);
   };
 
   const handleDelete = (tx) => {
@@ -673,6 +678,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
             />
             <button type="button" onClick={handleExport} className="btn-export">
               📁 Ekspor ke Excel
+            </button>
+            <button type="button" onClick={handleExportPdf} className="btn-export-pdf">
+              📕 Ekspor ke PDF
             </button>
           </section>
 

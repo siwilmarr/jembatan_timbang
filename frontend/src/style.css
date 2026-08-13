@@ -780,6 +780,28 @@ select:focus {
   border-color: #94a3b8;
 }
 
+.btn-export-pdf {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-export-pdf:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-color: #fca5a5;
+}
+
 .btn-table-print {
   background: #f0fdf4;
   color: #166534;

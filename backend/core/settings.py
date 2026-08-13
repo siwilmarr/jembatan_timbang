@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -144,6 +145,26 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
+if os.environ.get("VERCEL"):
+    STATIC_ROOT = "/tmp/staticfiles"
+else:
+    STATIC_ROOT = BASE_DIR / "staticfiles"
+
+try:
+    import whitenoise
+    staticfiles_backend = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+except ImportError:
+    staticfiles_backend = "django.contrib.staticfiles.storage.StaticFilesStorage"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": staticfiles_backend,
+    },
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # FIXED: sebelumnya hardcode ke localhost:5173 saja — domain produksi frontend

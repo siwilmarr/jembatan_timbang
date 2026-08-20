@@ -4,7 +4,31 @@ import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/env";
 
 export default function AdminPanel() {
-  const [activeSubTab, setActiveSubTab] = useState("users");
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("admin_active_subtab") || "users";
+    }
+    return "users";
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const val = localStorage.getItem("admin_active_subtab");
+      if (val && val !== activeSubTab) {
+        setActiveSubTab(val);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("admin_subtab_changed", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("admin_subtab_changed", handleStorageChange);
+    };
+  }, [activeSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem("admin_active_subtab", activeSubTab);
+  }, [activeSubTab]);
   const [users, setUsers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [destinations, setDestinations] = useState([]);

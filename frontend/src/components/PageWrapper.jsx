@@ -12,6 +12,8 @@ export default function PageWrapper({ children, requireAdmin = false }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [printTx, setPrintTx] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isAdminMenuExpanded, setIsAdminMenuExpanded] = useState(false);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("user_token");
@@ -62,6 +64,13 @@ export default function PageWrapper({ children, requireAdmin = false }) {
     router.push("/login");
   };
 
+  const handleAdminSubTabClick = (subtab) => {
+    localStorage.setItem("admin_active_subtab", subtab);
+    window.dispatchEvent(new Event("admin_subtab_changed"));
+    router.push("/admin");
+    setIsSidebarOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -73,38 +82,109 @@ export default function PageWrapper({ children, requireAdmin = false }) {
 
   return (
     <>
+      {/* Mobile Header Bar */}
+      <header className="mobile-header">
+        <button
+          type="button"
+          className="mobile-header__menu-btn"
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Buka Menu"
+        >
+          ☰
+        </button>
+        <div className="mobile-header__brand">
+          <span style={{ marginRight: "0.4rem" }}>🚛</span>
+          <span>Jembatan Timbang</span>
+        </div>
+        <div className="mobile-header__user-badge">
+          {user?.username?.substring(0, 2).toUpperCase() || "OP"}
+        </div>
+      </header>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       <div className="app-container">
         {/* Sidebar Kiri */}
-        <aside className="sidebar">
+        <aside className={`sidebar ${isSidebarOpen ? "sidebar--open" : ""}`}>
           <div className="sidebar__top">
             <div className="sidebar__brand">
               <span className="sidebar__logo">🚛</span>
               <span className="sidebar__title">Jembatan Timbang</span>
+              {/* Close button inside sidebar on mobile */}
+              <button
+                type="button"
+                className="sidebar__close-btn"
+                onClick={() => setIsSidebarOpen(false)}
+              >
+                ✕
+              </button>
             </div>
 
             <nav className="sidebar__nav">
               <button
                 type="button"
                 className={`sidebar__link ${pathname === "/" ? "sidebar__link--active" : ""}`}
-                onClick={() => router.push("/")}
+                onClick={() => {
+                  router.push("/");
+                  setIsSidebarOpen(false);
+                }}
               >
                 ⚖️ Penimbangan
               </button>
               <button
                 type="button"
                 className={`sidebar__link ${pathname === "/history" ? "sidebar__link--active" : ""}`}
-                onClick={() => router.push("/history")}
+                onClick={() => {
+                  router.push("/history");
+                  setIsSidebarOpen(false);
+                }}
               >
                 📋 Riwayat & Laporan
               </button>
               {user?.roles?.includes("Admin") && (
-                <button
-                  type="button"
-                  className={`sidebar__link ${pathname === "/admin" ? "sidebar__link--active" : ""}`}
-                  onClick={() => router.push("/admin")}
-                >
-                  ⚙️ Panel Admin
-                </button>
+                <div className="sidebar__submenu-container" style={{ width: "100%" }}>
+                  <button
+                    type="button"
+                    className={`sidebar__link ${pathname === "/admin" ? "sidebar__link--active" : ""}`}
+                    onClick={() => {
+                      if (typeof window !== "undefined" && window.innerWidth <= 992) {
+                        setIsAdminMenuExpanded(!isAdminMenuExpanded);
+                      } else {
+                        router.push("/admin");
+                      }
+                    }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>⚙️ Panel Admin</span>
+                    <span className="sidebar__submenu-toggle-icon" style={{
+                      fontSize: "0.75rem",
+                      transform: isAdminMenuExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease"
+                    }}>▼</span>
+                  </button>
+                  {isAdminMenuExpanded && (
+                    <div className="sidebar__submenu" style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.15rem",
+                      marginTop: "0.25rem",
+                      paddingLeft: "1.25rem",
+                      borderLeft: "2px solid rgba(255, 255, 255, 0.1)"
+                    }}>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("users")}>👤 Kelola User</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("warehouses")}>🏭 Kelola Gudang</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("cargos")}>📦 Kelola Muatan</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("units")}>🚛 Kelola Unit</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("customers")}>🤝 Kelola Customer/Supplier</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("weighing-types")}>⚖️ Jenis Timbangan</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("scales")}>🔌 Alat Timbangan</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("database")}>⚙️ Konfigurasi Database</button>
+                    </div>
+                  )}
+                </div>
               )}
             </nav>
           </div>

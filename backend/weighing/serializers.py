@@ -1,9 +1,20 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User, Group
-from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale
 
 
 from django.utils.html import strip_tags
+
+class WeighingScaleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeighingScale
+        fields = [
+            "id", "name", "indicator_type", "baud_rate", 
+            "data_bits", "stop_bits", "parity", "description", "is_active"
+        ]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
 
 class WarehouseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,6 +46,37 @@ class CargoSerializer(serializers.ModelSerializer):
         return strip_tags(value).strip() if value else value
 
 
+class UnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Unit
+        fields = ["id", "name", "description"]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
+
+
+class CustomerSupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerSupplier
+        fields = ["id", "name", "type", "contact", "address"]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
+
+
+class WeighingTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeighingType
+        fields = [
+            "id", "name", "description", "deduction_percent",
+            "require_driver", "require_destination", "require_cargo",
+            "require_customer", "require_unit", "max_weight_kg", "is_active"
+        ]
+
+    def validate_name(self, value):
+        return strip_tags(value).strip() if value else value
+
+
 class WeighingTransactionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField()
     warehouse_name = serializers.ReadOnlyField(source="warehouse.name", default=None)
@@ -57,15 +99,43 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
             "created_at_local",
             "created_at_server",
             "sync_status",
+            "unit",
+            "customer_supplier",
+            "weighing_type",
+            "deduction_percent",
+            "berat_potongan_kg",
         ]
-        read_only_fields = ["created_at_server", "sync_status", "berat_bersih_kg", "pasangan"]
+        read_only_fields = ["created_at_server", "sync_status", "berat_bersih_kg", "pasangan", "berat_potongan_kg"]
 
     def validate(self, attrs):
         # Sanitize all incoming string input fields from potential XSS injection
-        string_fields = ["nomor_polisi", "nama_driver", "jenis_muatan", "tujuan", "operator"]
+        string_fields = ["nomor_polisi", "nama_driver", "jenis_muatan", "tujuan", "operator", "unit", "customer_supplier", "weighing_type"]
         for field in string_fields:
             if field in attrs and isinstance(attrs[field], str):
                 attrs[field] = strip_tags(attrs[field]).strip()
+
+        # Validation for IN/OUT cycle
+        nomor_polisi = attrs.get("nomor_polisi")
+        jenis_timbang = attrs.get("jenis_timbang")
+        tx_id = attrs.get("id")
+
+        if nomor_polisi and jenis_timbang:
+            unpaired_txs = WeighingTransaction.objects.filter(
+                nomor_polisi=nomor_polisi,
+                pasangan__isnull=True
+            )
+            if tx_id:
+                unpaired_txs = unpaired_txs.exclude(id=tx_id)
+
+            if unpaired_txs.exists():
+                active_tx = unpaired_txs.first()
+                if active_tx.jenis_timbang == jenis_timbang:
+                    raise serializers.ValidationError(
+                        f"Kendaraan {nomor_polisi} sudah memiliki transaksi timbangan "
+                        f"{'Masuk (Gross)' if jenis_timbang == 'gross' else 'Keluar (Tare)'} "
+                        "aktif yang belum diselesaikan (belum in/out)."
+                    )
+
         return attrs
 
     def create(self, validated_data):

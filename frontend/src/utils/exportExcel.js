@@ -13,11 +13,15 @@ function sanitizeCell(value) {
 
 export function exportTransactionsToExcel(transactions, filename = "riwayat-timbang") {
   const rows = transactions.map((tx) => ({
+    "Jenis Timbangan": sanitizeCell(tx.weighing_type || "-"),
     "No. Polisi": sanitizeCell(tx.nomor_polisi),
     "Driver": sanitizeCell(tx.nama_driver),
+    "Unit": sanitizeCell(tx.unit || "-"),
+    "Customer/Supplier": sanitizeCell(tx.customer_supplier || "-"),
     "Muatan": sanitizeCell(tx.jenis_muatan),
     "Jenis": tx.jenis_timbang === "gross" ? "Masuk (Gross)" : "Keluar (Tare)",
     "Berat (kg)": tx.berat_kg,
+    "Potongan (kg)": tx.berat_potongan_kg ?? "-",
     "Berat Bersih (kg)": tx.berat_bersih_kg ?? "-",
     "Waktu Lokal": new Date(tx.created_at_local).toLocaleString("id-ID"),
     "Status": tx.sync_status === "synced" ? "Tersinkron" : "Pending",

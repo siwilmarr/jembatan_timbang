@@ -1326,3 +1326,51 @@ select:focus {
     transform: rotate(360deg);
   }
 }
+
+/* Weighing Form Info Message */
+.weighing-form__info-msg {
+  font-size: 0.85rem;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  margin-top: 0.4rem;
+  display: block;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Slide-in toast animation */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Secondary action button (cancel/back) */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1.1rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  white-space: nowrap;
+}
+.btn-secondary:hover {
+  background: #e2e8f0;
+  color: #334155;
+  border-color: #cbd5e1;
+}

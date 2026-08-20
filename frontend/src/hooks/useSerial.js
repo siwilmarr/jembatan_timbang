@@ -39,6 +39,7 @@ export function useSerial() {
   const stableTimerRef = useRef(null);
   const lastWeightRef = useRef(null);
   const simulateTimerRef = useRef(null);
+  const indicatorTypeRef = useRef("CAS"); // default CAS
 
   // FORMAT 1 -- "detail" sesuai dokumentasi CAS/GSC tertulis:
   //   ST,GS,+001234kg   atau   ST,NT,+025430kg\r\n
@@ -80,8 +81,9 @@ export function useSerial() {
     simulatorRef.current.start();
   }, [pushDebugLog]);
 
-  const connect = useCallback(async (options = {}) => {
-    const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
+  const connect = useCallback(async (options = {}, forceChoose = false) => {
+    const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none", indicator_type = "CAS" } = options;
+    indicatorTypeRef.current = indicator_type;
 
     if (APP_MODE === "demo") {
       connectSimulated();
@@ -98,11 +100,24 @@ export function useSerial() {
     }
 
     try {
-      pushDebugLog(
-        "info",
-        `Membuka dialog pilih port... (target setting: ${baudRate} baud, ${dataBits}N${stopBits}, parity=${parity})`
-      );
-      const port = await navigator.serial.requestPort();
+      let port = null;
+
+      if (!forceChoose) {
+        const approvedPorts = await navigator.serial.getPorts();
+        if (approvedPorts && approvedPorts.length > 0) {
+          port = approvedPorts[0];
+          pushDebugLog("info", "Menemukan port serial yang sudah pernah diotorisasi. Menghubungkan secara otomatis...");
+        }
+      }
+
+      if (!port) {
+        pushDebugLog(
+          "info",
+          `Membuka dialog pilih port... (target setting: ${baudRate} baud, ${dataBits}N${stopBits}, parity=${parity})`
+        );
+        port = await navigator.serial.requestPort();
+      }
+
       const info = port.getInfo?.() || {};
       pushDebugLog(
         "info",
@@ -168,45 +183,45 @@ export function useSerial() {
   };
 
   function parseFrame(frame) {
-    // Coba format detail dulu (ST/US,GS/NT,+angka)
-    let match = frame.match(DETAILED_REGEX);
-    if (match) {
-      const [, stability, type, rawWeight] = match;
-      const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
-      if (isNaN(parsedWeight)) {
-        pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+    // Hanya coba format detail jika tipe indikator CAS
+    if (indicatorTypeRef.current === "CAS") {
+      let match = frame.match(DETAILED_REGEX);
+      if (match) {
+        const [, stability, type, rawWeight] = match;
+        const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
+        if (isNaN(parsedWeight)) {
+          pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+          return;
+        }
+        pushDebugLog(
+          "success",
+          `✅ (format detail CAS) stabil=${stability.toUpperCase()} mode=${type.toUpperCase()} berat=${parsedWeight}`
+        );
+        if (stability.toUpperCase() === "OL") {
+          setError("Alat timbangan overload (beban melebihi kapasitas).");
+        }
+        updateWeight(parsedWeight, stability.toUpperCase() === "ST", type.toUpperCase());
         return;
       }
-      pushDebugLog(
-        "success",
-        `✅ (format detail) stabil=${stability.toUpperCase()} mode=${type.toUpperCase()} berat=${parsedWeight}`
-      );
-      if (stability.toUpperCase() === "OL") {
-        setError("Alat timbangan overload (beban melebihi kapasitas).");
-      }
-      updateWeight(parsedWeight, stability.toUpperCase() === "ST", type.toUpperCase());
-      return;
     }
 
-    // Fallback: format sederhana (STX + angka + kg), terbukti cocok
-    // dengan data asli alat GSC SGW-3015PS Anda.
-    match = frame.match(SIMPLE_REGEX);
-    if (match) {
-      const [, rawWeight] = match;
-      const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
-      if (isNaN(parsedWeight)) {
-        pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+    // Hanya coba format sederhana jika tipe indikator GSC
+    if (indicatorTypeRef.current === "GSC") {
+      let match = frame.match(SIMPLE_REGEX);
+      if (match) {
+        const [, rawWeight] = match;
+        const parsedWeight = parseFloat(rawWeight.replace(/\s/g, ""));
+        if (isNaN(parsedWeight)) {
+          pushDebugLog("warn", `Angka berat gagal di-parse dari: "${rawWeight}"`);
+          return;
+        }
+        pushDebugLog(
+          "success",
+          `✅ (format sederhana GSC) berat=${parsedWeight} (status stabil dihitung otomatis oleh app)`
+        );
+        updateWeight(parsedWeight, null, "GS");
         return;
       }
-      pushDebugLog(
-        "success",
-        `✅ (format sederhana) berat=${parsedWeight} (status stabil dihitung otomatis oleh app)`
-      );
-      // stable=null -> updateWeight() pakai timer 2 detik (angka tidak
-      // berubah selama 2 detik = dianggap stabil), karena format ini tidak
-      // mengirim status stabil secara eksplisit.
-      updateWeight(parsedWeight, null, "GS");
-      return;
     }
 
     pushDebugLog("warn", `Frame diterima tapi TIDAK COCOK format apa pun: ${JSON.stringify(frame)}`);

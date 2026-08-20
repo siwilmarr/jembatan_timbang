@@ -15,6 +15,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     nama_driver: "",
     jenis_muatan: "",
     tujuan: "",
+    unit: "",
+    customer_supplier: "",
+    weighing_type: "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -314,6 +317,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
       nama_driver: tx.nama_driver,
       jenis_muatan: tx.jenis_muatan || "",
       tujuan: tx.tujuan || "",
+      unit: tx.unit || "",
+      customer_supplier: tx.customer_supplier || "",
+      weighing_type: tx.weighing_type || "",
     });
   };
 
@@ -358,6 +364,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
         nama_driver: updatedData.nama_driver,
         jenis_muatan: updatedData.jenis_muatan,
         tujuan: updatedData.tujuan,
+        unit: updatedData.unit,
+        customer_supplier: updatedData.customer_supplier,
+        weighing_type: updatedData.weighing_type,
       });
 
       setSuccess("Transaksi berhasil diperbarui.");
@@ -689,11 +698,15 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
               <thead>
                 <tr>
                   <th>Waktu</th>
+                  <th>Tipe Timbangan</th>
                   <th>Warehouse</th>
                   <th>No. Polisi</th>
                   <th>Nama Driver</th>
+                  <th>Unit</th>
+                  <th>Customer/Supplier</th>
                   <th>Jenis Timbang</th>
                   <th>Berat (kg)</th>
+                  <th>Potongan</th>
                   <th>Netto (kg)</th>
                   <th>Muatan</th>
                   <th>Tujuan</th>
@@ -705,7 +718,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
               <tbody>
                 {filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center text-muted">
+                    <td colSpan={18} className="text-center text-muted">
                       Tidak ada data penimbangan yang cocok dengan kriteria filter.
                     </td>
                   </tr>
@@ -713,15 +726,21 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                   filteredHistory.map((tx) => (
                     <tr key={tx.id}>
                       <td>{new Date(tx.created_at_local).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</td>
+                      <td className="font-semibold">{tx.weighing_type || "-"}</td>
                       <td className="font-semibold">{tx.warehouse_name || "-"}</td>
                       <td className="font-semibold">{tx.nomor_polisi}</td>
-                      <td>{tx.nama_driver}</td>
+                      <td>{tx.nama_driver || "-"}</td>
+                      <td>{tx.unit || "-"}</td>
+                      <td>{tx.customer_supplier || "-"}</td>
                       <td>
                         <span className={`badge-type badge-type--${tx.jenis_timbang}`}>
                           {tx.jenis_timbang === "gross" ? "Gross" : "Tare"}
                         </span>
                       </td>
                       <td className="font-semibold">{tx.berat_kg} kg</td>
+                      <td className="font-semibold" style={{ color: tx.berat_potongan_kg ? "#b45309" : "#64748b" }}>
+                        {tx.berat_potongan_kg ? `${tx.berat_potongan_kg} kg` : "-"}
+                      </td>
                       <td>{tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}</td>
                       <td>{tx.jenis_muatan || "-"}</td>
                       <td>{tx.tujuan || "-"}</td>
@@ -810,6 +829,33 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                   type="text"
                   value={editForm.tujuan}
                   onChange={(e) => setEditForm({ ...editForm, tujuan: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Unit Kendaraan
+                <input
+                  type="text"
+                  value={editForm.unit}
+                  onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Customer/Supplier
+                <input
+                  type="text"
+                  value={editForm.customer_supplier}
+                  onChange={(e) => setEditForm({ ...editForm, customer_supplier: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Jenis Timbangan
+                <input
+                  type="text"
+                  value={editForm.weighing_type}
+                  onChange={(e) => setEditForm({ ...editForm, weighing_type: e.target.value })}
                 />
               </label>
 

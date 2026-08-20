@@ -14,11 +14,15 @@ export async function exportTransactionsToPdf(transactions, filename = "riwayat-
 
     const columns = [
       { title: "Waktu Lokal", dataKey: "waktu" },
+      { title: "Tipe", dataKey: "weighing_type" },
       { title: "Warehouse", dataKey: "warehouse" },
       { title: "No. Polisi", dataKey: "nomor_polisi" },
       { title: "Nama Driver", dataKey: "nama_driver" },
+      { title: "Unit", dataKey: "unit" },
+      { title: "Cust/Supl", dataKey: "cust_supl" },
       { title: "Jenis Timbang", dataKey: "jenis" },
       { title: "Berat (kg)", dataKey: "berat" },
+      { title: "Potongan (kg)", dataKey: "potongan" },
       { title: "Netto (kg)", dataKey: "netto" },
       { title: "Muatan", dataKey: "muatan" },
       { title: "Tujuan", dataKey: "tujuan" },
@@ -27,11 +31,15 @@ export async function exportTransactionsToPdf(transactions, filename = "riwayat-
 
     const rows = transactions.map((tx) => ({
       waktu: new Date(tx.created_at_local).toLocaleString("id-ID"),
+      weighing_type: tx.weighing_type || "-",
       warehouse: tx.warehouse_name || "-",
       nomor_polisi: tx.nomor_polisi,
       nama_driver: tx.nama_driver,
+      unit: tx.unit || "-",
+      cust_supl: tx.customer_supplier || "-",
       jenis: tx.jenis_timbang === "gross" ? "Masuk (Gross)" : "Keluar (Tare)",
       berat: `${parseFloat(tx.berat_kg).toLocaleString("id-ID")} kg`,
+      potongan: tx.berat_potongan_kg ? `${parseFloat(tx.berat_potongan_kg).toLocaleString("id-ID")} kg` : "-",
       netto: tx.berat_bersih_kg ? `${parseFloat(tx.berat_bersih_kg).toLocaleString("id-ID")} kg` : "-",
       muatan: tx.jenis_muatan || "-",
       tujuan: tx.tujuan || "-",
@@ -42,8 +50,8 @@ export async function exportTransactionsToPdf(transactions, filename = "riwayat-
       columns: columns,
       body: rows,
       startY: 25,
-      margin: { horizontal: 14 },
-      styles: { fontSize: 8, cellPadding: 2 },
+      margin: { horizontal: 10 },
+      styles: { fontSize: 7, cellPadding: 1.5 },
       headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       theme: "striped"

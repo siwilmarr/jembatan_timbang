@@ -22,12 +22,37 @@ if (typeof window !== "undefined") {
     destinations: "++id, name",
     cargos: "++id, name",
   });
+
+  db.version(3).stores({
+    weighing_transactions:
+      "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
+    destinations: "++id, name",
+    cargos: "++id, name",
+    units: "++id, name",
+    customers: "++id, name",
+    weighing_types: "++id, name",
+  });
+
+  db.version(4).stores({
+    weighing_transactions:
+      "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
+    destinations: "++id, name",
+    cargos: "++id, name",
+    units: "++id, name",
+    customers: "++id, name",
+    weighing_types: "++id, name",
+    scales: "++id, name",
+  });
 } else {
   // Placeholder agar import di SSR tidak crash
   db = {
     weighing_transactions: { add: async () => {}, where: () => ({ equals: () => ({ toArray: async () => [] }), above: () => ({ reverse: () => ({ toArray: async () => [] }) }), between: () => ({ toArray: async () => [] }) }), put: async () => {}, delete: async () => {}, toArray: async () => [] },
     destinations: { toArray: async () => [], bulkPut: async () => {} },
     cargos: { toArray: async () => [], bulkPut: async () => {} },
+    units: { toArray: async () => [], bulkPut: async () => {} },
+    customers: { toArray: async () => [], bulkPut: async () => {} },
+    weighing_types: { toArray: async () => [], bulkPut: async () => {} },
+    scales: { toArray: async () => [], bulkPut: async () => {} },
   };
 }
 

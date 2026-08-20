@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale
 from django.contrib.auth.models import User
 from .serializers import (
     WeighingTransactionSerializer,
@@ -13,6 +13,10 @@ from .serializers import (
     DestinationSerializer,
     CargoSerializer,
     UserSerializer,
+    UnitSerializer,
+    CustomerSupplierSerializer,
+    WeighingTypeSerializer,
+    WeighingScaleSerializer,
 )
 from .permissions import IsAdminOrReadOnly, IsAdminOrReadOnlyMaster, IsAdminUserOnly
 
@@ -172,6 +176,48 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
+
+
+class UnitViewSet(viewsets.ModelViewSet):
+    queryset = Unit.objects.all().order_by("name")
+    serializer_class = UnitSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+
+class CustomerSupplierViewSet(viewsets.ModelViewSet):
+    queryset = CustomerSupplier.objects.all().order_by("name")
+    serializer_class = CustomerSupplierSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+
+class WeighingTypeViewSet(viewsets.ModelViewSet):
+    queryset = WeighingType.objects.all().order_by("name")
+    serializer_class = WeighingTypeSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        active_only = self.request.query_params.get("active_only")
+        if active_only == "1":
+            qs = qs.filter(is_active=True)
+        return qs
+
+
+class WeighingScaleViewSet(viewsets.ModelViewSet):
+    queryset = WeighingScale.objects.all()
+    serializer_class = WeighingScaleSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        active_only = self.request.query_params.get("active_only")
+        if active_only == "1":
+            qs = qs.filter(is_active=True)
+        return qs
 
 
 import os

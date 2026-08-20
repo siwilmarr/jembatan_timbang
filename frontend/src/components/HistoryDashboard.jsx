@@ -27,13 +27,17 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
   const [warehouses, setWarehouses] = useState([]);
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today.toISOString().split("T")[0];
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   });
   const [endDate, setEndDate] = useState(() => {
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    return today.toISOString().split("T")[0];
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   });
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [activeTabType, setActiveTabType] = useState("detail"); // "detail" atau "summary"
@@ -136,7 +140,7 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
 
       // 2. Jika online, lakukan sinkronisasi dua arah dengan server
       if (navigator.onLine && userToken) {
-        let url = `${API_BASE}/weighing/?created_at_local_gte=${startIso}&created_at_local_lte=${endIso}`;
+        let url = `${API_BASE}/weighing/?created_at_local_gte=${encodeURIComponent(startIso)}&created_at_local_lte=${encodeURIComponent(endIso)}`;
         if (selectedWarehouse) {
           url += `&warehouse_id=${selectedWarehouse}`;
         }

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import WeighingTransaction, Warehouse, UserProfile, Destination, Cargo
+from .models import WeighingTransaction, Warehouse, UserProfile, Destination, Cargo, Unit, CustomerSupplier, WeighingType, WeighingScale
 
 
 class UserProfileInline(admin.StackedInline):
@@ -35,6 +35,40 @@ class CargoAdmin(admin.ModelAdmin):
     search_fields = ("name",)
 
 
+@admin.register(Unit)
+class UnitAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "description")
+    search_fields = ("name",)
+
+
+@admin.register(CustomerSupplier)
+class CustomerSupplierAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "type", "contact", "address")
+    search_fields = ("name", "contact")
+    list_filter = ("type",)
+
+
+@admin.register(WeighingType)
+class WeighingTypeAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "name", "deduction_percent",
+        "require_driver", "require_destination", "require_cargo",
+        "require_customer", "require_unit", "max_weight_kg", "is_active"
+    )
+    list_filter = ("is_active", "require_driver", "require_cargo")
+    search_fields = ("name",)
+
+
+@admin.register(WeighingScale)
+class WeighingScaleAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "name", "indicator_type",
+        "baud_rate", "data_bits", "stop_bits", "parity", "is_active"
+    )
+    list_filter = ("indicator_type", "is_active")
+    search_fields = ("name",)
+
+
 @admin.register(WeighingTransaction)
 class WeighingTransactionAdmin(admin.ModelAdmin):
     list_display = (
@@ -51,3 +85,4 @@ class WeighingTransactionAdmin(admin.ModelAdmin):
     )
     list_filter = ("jenis_timbang", "sync_status", "warehouse")
     search_fields = ("nomor_polisi", "nama_driver", "tujuan")
+

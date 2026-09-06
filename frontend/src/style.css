@@ -414,13 +414,23 @@ select:focus {
 
 @media print {
 
-  /* Sembunyikan SELURUH layout aplikasi React */
-  .app-container {
+  /* Sembunyikan SELURUH layout UI aplikasi, header mobile & sidebar */
+  .app-container,
+  .mobile-header,
+  .sidebar-overlay,
+  .sidebar,
+  header,
+  nav,
+  footer {
     display: none !important;
   }
 
   .receipt-print {
-    display: block;
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
     font-family: "Courier New", monospace;
     font-size: 11px;
     padding: 2mm 3mm;

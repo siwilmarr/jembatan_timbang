@@ -33,7 +33,7 @@ if (typeof window !== "undefined") {
     weighing_types: "++id, name",
   });
 
-  db.version(4).stores({
+  db.version(6).stores({
     weighing_transactions:
       "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
     destinations: "++id, name",
@@ -42,17 +42,36 @@ if (typeof window !== "undefined") {
     customers: "++id, name",
     weighing_types: "++id, name",
     scales: "++id, name",
+    site_profile: "id",
+    site_profiles: "++id, company_name",
+  });
+
+  db.version(7).stores({
+    weighing_transactions:
+      "++localId, id, nomor_polisi, jenis_timbang, sync_status, created_at_local, warehouse_id",
+    destinations: "++id, name",
+    cargos: "++id, name",
+    units: "++id, name",
+    customers: "++id, name",
+    weighing_types: "++id, name",
+    scales: "++id, name",
+    site_profile: "id",
+    site_profiles: "++id, company_name",
+    price_lists: "++id, cargo_name, effective_date",
   });
 } else {
   // Placeholder agar import di SSR tidak crash
   db = {
     weighing_transactions: { add: async () => {}, where: () => ({ equals: () => ({ toArray: async () => [] }), above: () => ({ reverse: () => ({ toArray: async () => [] }) }), between: () => ({ toArray: async () => [] }) }), put: async () => {}, delete: async () => {}, toArray: async () => [] },
-    destinations: { toArray: async () => [], bulkPut: async () => {} },
-    cargos: { toArray: async () => [], bulkPut: async () => {} },
-    units: { toArray: async () => [], bulkPut: async () => {} },
-    customers: { toArray: async () => [], bulkPut: async () => {} },
-    weighing_types: { toArray: async () => [], bulkPut: async () => {} },
-    scales: { toArray: async () => [], bulkPut: async () => {} },
+    destinations: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    cargos: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    units: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    customers: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    weighing_types: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    scales: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {} },
+    site_profile: { toArray: async () => [], put: async () => {}, get: async () => null },
+    site_profiles: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {}, delete: async () => {} },
+    price_lists: { toArray: async () => [], bulkPut: async () => {}, clear: async () => {}, bulkAdd: async () => {}, delete: async () => {} },
   };
 }
 

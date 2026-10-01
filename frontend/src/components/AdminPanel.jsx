@@ -104,13 +104,36 @@ export default function AdminPanel() {
     data_bits: 8, stop_bits: 1, parity: "none", description: "", is_active: true
   });
 
-  const API_BASE = API_BASE_URL;
-  const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
+  const [profilesList, setProfilesList] = useState([]);
+  const [profileForm, setProfileForm] = useState({
+    id: null,
+    company_name: "",
+    address: "",
+    phone: "",
+    email: "",
+    website: "",
+    npwp: "",
+  });
 
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Token ${userToken}`,
+  const [priceLists, setPriceLists] = useState([]);
+  const [priceListForm, setPriceListForm] = useState({
+    id: null,
+    cargo_name: "",
+    price_per_kg: "",
+    effective_date: new Date().toISOString().split("T")[0],
+    note: "",
+  });
+
+
+  const API_BASE = API_BASE_URL;
+  const getHeaders = () => {
+    const token = typeof window !== "undefined" ? (localStorage.getItem("user_token") || "") : "";
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Token ${token}`,
+    };
   };
+  const headers = getHeaders();
 
   // Fetch Data
   const fetchData = async () => {
@@ -152,7 +175,25 @@ export default function AdminPanel() {
       } else if (activeSubTab === "database") {
         const res = await fetch(`${API_BASE}/db-config/`, { headers });
         if (res.ok) setDbForm(await res.json());
+      } else if (activeSubTab === "profile") {
+        const res = await fetch(`${API_BASE}/site-profiles/`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setProfilesList(Array.isArray(data) ? data : (data.results || []));
+        }
+      } else if (activeSubTab === "price-list") {
+        const [plRes, cRes] = await Promise.all([
+          fetch(`${API_BASE}/price-lists/`, { headers }),
+          fetch(`${API_BASE}/cargos/`, { headers }),
+        ]);
+        if (plRes.ok) {
+          const data = await plRes.json();
+          setPriceLists(Array.isArray(data) ? data : (data.results || []));
+        }
+        if (cRes.ok) setCargos(await cRes.json());
       }
+
+
     } catch (err) {
       setError("Gagal memuat data master.");
     } finally {
@@ -488,7 +529,168 @@ export default function AdminPanel() {
     }
   };
 
+  // Handle Submit Profil Perusahaan (Pemilik Timbangan)
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      const isEdit = !!profileForm.id;
+      const url = isEdit ? `${API_BASE}/site-profiles/${profileForm.id}/` : `${API_BASE}/site-profiles/`;
+      const payload = { ...profileForm };
+      if (!isEdit) delete payload.id;
+      const res = await fetch(url, {
+        method: isEdit ? "PUT" : "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      let data = null;
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json();
+        } catch (_) {}
+      }
+
+      if (!res.ok) {
+        let errMessage = "Gagal menyimpan profil perusahaan.";
+        if (data && typeof data === "object") {
+          if (data.detail) {
+            errMessage = data.detail;
+          } else {
+            const fieldErrors = Object.entries(data)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+              .join(" | ");
+            if (fieldErrors) errMessage = fieldErrors;
+          }
+        } else {
+          errMessage = `Server mengembalikan status ${res.status} (${res.statusText || "Error"})`;
+        }
+        throw new Error(errMessage);
+      }
+
+      setProfileForm({ id: null, company_name: "", address: "", phone: "", email: "", website: "", npwp: "" });
+      const msg = isEdit ? "Profil perusahaan berhasil diperbarui." : "Profil perusahaan berhasil ditambahkan.";
+      setSuccess(msg);
+      showToast(msg, "success");
+      fetchData();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("site_profile_updated"));
+      }
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileDelete = async (id) => {
+    if (!confirm("Hapus profil perusahaan ini?")) return;
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(`${API_BASE}/site-profiles/${id}/`, {
+        method: "DELETE",
+        headers: getHeaders(),
+      });
+      if (!res.ok) {
+        let errMsg = "Gagal menghapus profil perusahaan.";
+        try {
+          const d = await res.json();
+          if (d?.detail) errMsg = d.detail;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
+      showToast("Profil perusahaan berhasil dihapus.", "success");
+      setSuccess("Profil perusahaan dihapus.");
+      fetchData();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("site_profile_updated"));
+      }
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    }
+  };
+
+  const handlePriceListSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    try {
+      if (!priceListForm.cargo_name.trim()) throw new Error("Jenis muatan wajib dipilih atau diisi.");
+      if (!priceListForm.price_per_kg || Number(priceListForm.price_per_kg) <= 0) {
+        throw new Error("Harga per kg harus lebih besar dari 0.");
+      }
+      if (!priceListForm.effective_date) throw new Error("Tanggal berlaku efektif wajib diisi.");
+
+      const isEdit = !!priceListForm.id;
+      const url = isEdit ? `${API_BASE}/price-lists/${priceListForm.id}/` : `${API_BASE}/price-lists/`;
+      const method = isEdit ? "PUT" : "POST";
+      const payload = {
+        cargo_name: priceListForm.cargo_name.trim(),
+        price_per_kg: parseFloat(priceListForm.price_per_kg),
+        effective_date: priceListForm.effective_date,
+        note: priceListForm.note ? priceListForm.note.trim() : "",
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let errMsg = "Gagal menyimpan master harga.";
+        try {
+          const d = await res.json();
+          if (d?.detail) errMsg = d.detail;
+          else if (typeof d === "object") errMsg = Object.entries(d).map(([k, v]) => `${k}: ${v}`).join(", ");
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      showToast(isEdit ? "Master harga berhasil diperbarui." : "Master harga berhasil ditambahkan.", "success");
+      setSuccess(isEdit ? "Master harga diperbarui." : "Master harga ditambahkan.");
+      setPriceListForm({
+        id: null,
+        cargo_name: "",
+        price_per_kg: "",
+        effective_date: new Date().toISOString().split("T")[0],
+        note: "",
+      });
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    }
+  };
+
+  const handlePriceListDelete = async (id) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data master harga ini?")) return;
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(`${API_BASE}/price-lists/${id}/`, {
+        method: "DELETE",
+        headers: getHeaders(),
+      });
+      if (!res.ok) throw new Error("Gagal menghapus data harga.");
+      showToast("Master harga berhasil dihapus.", "success");
+      setSuccess("Master harga dihapus.");
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    }
+  };
+
+
   return (
+
     <div className="admin-panel" style={{ padding: "1.5rem" }}>
       <header className="history-dashboard__header">
         <h2>Panel Administrasi Master Data</h2>
@@ -555,12 +757,27 @@ export default function AdminPanel() {
         </button>
         <button
           type="button"
+          className={`navbar__tab ${activeSubTab === "profile" ? "navbar__tab--active" : ""}`}
+          onClick={() => setActiveSubTab("profile")}
+        >
+          🏢 Profil Perusahaan
+        </button>
+        <button
+          type="button"
+          className={`navbar__tab ${activeSubTab === "price-list" ? "navbar__tab--active" : ""}`}
+          onClick={() => setActiveSubTab("price-list")}
+        >
+          💰 Master Harga
+        </button>
+        <button
+          type="button"
           className={`navbar__tab ${activeSubTab === "database" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("database")}
         >
           ⚙️ Konfigurasi Database
         </button>
       </div>
+
 
       {error && <div className="alert alert--error" style={{ marginBottom: "1rem" }}>{error}</div>}
       {success && <div className="alert alert--success" style={{ marginBottom: "1rem" }}>{success}</div>}
@@ -1019,9 +1236,12 @@ export default function AdminPanel() {
           {/* Form */}
           <form onSubmit={handleCustomerSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
             <h3>{customerForm.id ? "✏️ Edit Customer/Supplier" : "➕ Tambah Customer/Supplier"}</h3>
+            <p style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: "1rem", lineHeight: 1.5, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "0.6rem 0.8rem" }}>
+              💡 Data yang diisi di sini akan muncul sebagai pilihan <strong>dropdown</strong> di halaman <strong>Penimbangan</strong>, lengkap dengan alamat yang terisi otomatis.
+            </p>
             <label>
-              Nama
-              <input value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} required placeholder="Nama perusahaan/perorangan" />
+              Nama PT / Customer <span style={{ color: "red" }}>*</span>
+              <input value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} required placeholder="Nama perusahaan / perorangan" />
             </label>
             <label>
               Tipe
@@ -1032,12 +1252,18 @@ export default function AdminPanel() {
               </select>
             </label>
             <label>
-              Kontak
+              Kontak <span style={{ fontSize: "0.8rem", color: "#64748b" }}>(opsional)</span>
               <input value={customerForm.contact} onChange={e => setCustomerForm({ ...customerForm, contact: e.target.value })} placeholder="No. telp / email" />
             </label>
             <label>
-              Alamat
-              <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} placeholder="Alamat lengkap" />
+              Alamat Lengkap <span style={{ fontSize: "0.8rem", color: "#64748b" }}>(akan auto-fill di form timbang)</span>
+              <textarea
+                value={customerForm.address}
+                onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })}
+                placeholder="Jl. Contoh No. 1, Kota, Provinsi"
+                rows={3}
+                style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.9rem", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+              />
             </label>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
               <button type="submit" className="btn-primary" style={{ flex: 1 }}>Simpan</button>
@@ -1437,6 +1663,348 @@ export default function AdminPanel() {
           </form>
         </div>
       )}
+
+      {/* SECTION PROFIL PERUSAHAAN (PEMILIK TIMBANGAN) */}
+      {!loading && activeSubTab === "profile" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
+          {/* Form Create / Edit */}
+          <form onSubmit={handleProfileSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+            <h3>{profileForm.id ? "✏️ Edit Profil Perusahaan" : "➕ Tambah Profil Perusahaan"}</h3>
+            <p style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: "1rem", lineHeight: 1.5, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "0.6rem 0.8rem" }}>
+              💡 Data profil PT ini akan muncul sebagai pilihan <strong>dropdown Nama PT</strong> di form timbang, dan alamatnya otomatis terisi pada transaksi serta kop kwitansi.
+            </p>
+
+            <label>
+              Nama Perusahaan / PT <span style={{ color: "red" }}>*</span>
+              <input
+                type="text"
+                required
+                value={profileForm.company_name}
+                onChange={(e) => setProfileForm({ ...profileForm, company_name: e.target.value })}
+                placeholder="Contoh: PT. SAWIT MAKMUR ABADI"
+              />
+            </label>
+
+            <label>
+              Alamat Lengkap PT
+              <textarea
+                rows={3}
+                value={profileForm.address}
+                onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                placeholder="Jl. Industri Raya No. 45, Sentul, Bogor"
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontFamily: "inherit",
+                  fontSize: "0.95rem",
+                  resize: "vertical",
+                  boxSizing: "border-box"
+                }}
+              />
+            </label>
+
+            <label>
+              Nomor Telepon / WhatsApp
+              <input
+                type="text"
+                value={profileForm.phone}
+                onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                placeholder="Contoh: (021) 8765432"
+              />
+            </label>
+
+            <label>
+              Email Resmi <span style={{ fontSize: "0.8rem", color: "#64748b" }}>(opsional)</span>
+              <input
+                type="email"
+                value={profileForm.email}
+                onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                placeholder="Contoh: info@perusahaan.co.id"
+              />
+            </label>
+
+            <label>
+              NPWP Perusahaan <span style={{ fontSize: "0.8rem", color: "#64748b" }}>(opsional)</span>
+              <input
+                type="text"
+                value={profileForm.npwp}
+                onChange={(e) => setProfileForm({ ...profileForm, npwp: e.target.value })}
+                placeholder="Contoh: 01.234.567.8-901.000"
+              />
+            </label>
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+              <button type="submit" className="btn-primary" style={{ flex: 1 }}>
+                Simpan
+              </button>
+              {profileForm.id && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setProfileForm({ id: null, company_name: "", address: "", phone: "", email: "", website: "", npwp: "" })}
+                >
+                  Batal
+                </button>
+              )}
+            </div>
+          </form>
+
+          {/* Table Daftar PT */}
+          <div className="history-dashboard__table-container">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>Nama Perusahaan / PT</th>
+                  <th>Alamat</th>
+                  <th>Kontak / Telepon</th>
+                  <th>Email</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profilesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center text-muted" style={{ padding: "2rem" }}>
+                      Belum ada data profil perusahaan. Silakan tambahkan melalui form di samping.
+                    </td>
+                  </tr>
+                ) : (
+                  profilesList.map((p) => (
+                    <tr key={p.id}>
+                      <td className="font-semibold">{p.company_name}</td>
+                      <td>
+                        <span style={{ fontSize: "0.85rem", color: "#475569", whiteSpace: "pre-line" }}>
+                          {p.address || "-"}
+                        </span>
+                      </td>
+                      <td>{p.phone || "-"}</td>
+                      <td>{p.email || "-"}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            className="btn-table-edit"
+                            onClick={() => setProfileForm({
+                              id: p.id,
+                              company_name: p.company_name,
+                              address: p.address || "",
+                              phone: p.phone || "",
+                              email: p.email || "",
+                              website: p.website || "",
+                              npwp: p.npwp || "",
+                            })}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-table-delete"
+                            onClick={() => handleProfileDelete(p.id)}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION MASTER HARGA */}
+      {!loading && activeSubTab === "price-list" && (() => {
+        const todayStr = new Date().toISOString().split("T")[0];
+        // Cari harga aktif untuk setiap jenis muatan (effective_date <= todayStr, yang paling baru)
+        const activePriceMap = {};
+        priceLists.forEach((pl) => {
+          if (pl.effective_date <= todayStr) {
+            const key = pl.cargo_name.toLowerCase();
+            if (!activePriceMap[key] || pl.effective_date > activePriceMap[key].effective_date) {
+              activePriceMap[key] = pl;
+            }
+          }
+        });
+
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
+            {/* Form Master Harga */}
+            <form onSubmit={handlePriceListSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+              <h3>{priceListForm.id ? "✏️ Edit Master Harga" : "➕ Tambah Master Harga"}</h3>
+              <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "-0.5rem", marginBottom: "1rem" }}>
+                Harga per kg berdasarkan jenis muatan dan tanggal mulai berlaku efektif.
+              </p>
+
+              <label>
+                Jenis Muatan <span style={{ color: "red" }}>*</span>
+                {cargos.length > 0 ? (
+                  <select
+                    value={priceListForm.cargo_name}
+                    onChange={(e) => setPriceListForm({ ...priceListForm, cargo_name: e.target.value })}
+                    required
+                  >
+                    <option value="">-- Pilih Jenis Muatan --</option>
+                    {cargos.map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.84rem", color: "#ef4444", fontStyle: "italic" }}>
+                    ⚠️ Belum ada jenis muatan. Tambahkan terlebih dahulu di bagian <strong>Kelola Muatan</strong>.
+                  </p>
+                )}
+              </label>
+
+              <label>
+                Harga per Kg (Rp) <span style={{ color: "red" }}>*</span>
+                <input
+                  type="number"
+                  placeholder="misal: 2800"
+                  value={priceListForm.price_per_kg}
+                  onChange={(e) => setPriceListForm({ ...priceListForm, price_per_kg: e.target.value })}
+                  min="0"
+                  step="any"
+                  required
+                />
+              </label>
+
+              <label>
+                Tanggal Mulai Berlaku <span style={{ color: "red" }}>*</span>
+                <input
+                  type="date"
+                  value={priceListForm.effective_date}
+                  onChange={(e) => setPriceListForm({ ...priceListForm, effective_date: e.target.value })}
+                  required
+                />
+                <span style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.2rem" }}>
+                  Harga otomatis berlaku untuk transaksi pada atau setelah tanggal ini.
+                </span>
+              </label>
+
+              <label>
+                Catatan / Keterangan (Opsional)
+                <input
+                  type="text"
+                  placeholder="misal: Harga penetapan Disbun Okt 2026"
+                  value={priceListForm.note}
+                  onChange={(e) => setPriceListForm({ ...priceListForm, note: e.target.value })}
+                />
+              </label>
+
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1 }}>
+                  {priceListForm.id ? "Perbarui Harga" : "Simpan Harga"}
+                </button>
+                {priceListForm.id && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setPriceListForm({
+                      id: null,
+                      cargo_name: "",
+                      price_per_kg: "",
+                      effective_date: new Date().toISOString().split("T")[0],
+                      note: "",
+                    })}
+                  >
+                    Batal
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {/* Table Daftar Master Harga */}
+            <div className="history-dashboard__table-container">
+              <table className="history-table">
+                <thead>
+                  <tr>
+                    <th>Jenis Muatan</th>
+                    <th>Harga / kg</th>
+                    <th>Berlaku Mulai</th>
+                    <th>Status</th>
+                    <th>Catatan</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceLists.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center text-muted" style={{ padding: "2rem" }}>
+                        Belum ada data master harga. Silakan tambahkan harga per jenis muatan melalui form di samping.
+                      </td>
+                    </tr>
+                  ) : (
+                    priceLists.map((p) => {
+                      const isFuture = p.effective_date > todayStr;
+                      const isActive = !isFuture && activePriceMap[p.cargo_name.toLowerCase()]?.id === p.id;
+
+                      return (
+                        <tr key={p.id}>
+                          <td className="font-semibold">{p.cargo_name}</td>
+                          <td style={{ fontWeight: "700", color: "#0f172a" }}>
+                            Rp {Number(p.price_per_kg).toLocaleString("id-ID")}
+                          </td>
+                          <td>{p.effective_date}</td>
+                          <td>
+                            {isFuture ? (
+                              <span style={{ background: "#fef3c7", color: "#92400e", padding: "0.25rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "600" }}>
+                                ⏳ Akan Datang
+                              </span>
+                            ) : isActive ? (
+                              <span style={{ background: "#dcfce7", color: "#166534", padding: "0.25rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: "600" }}>
+                                ✓ Aktif
+                              </span>
+                            ) : (
+                              <span style={{ background: "#f1f5f9", color: "#64748b", padding: "0.25rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem" }}>
+                                Riwayat
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span style={{ fontSize: "0.85rem", color: "#475569" }}>
+                              {p.note || "-"}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="table-actions">
+                              <button
+                                type="button"
+                                className="btn-table-edit"
+                                onClick={() => setPriceListForm({
+                                  id: p.id,
+                                  cargo_name: p.cargo_name,
+                                  price_per_kg: p.price_per_kg,
+                                  effective_date: p.effective_date,
+                                  note: p.note || "",
+                                })}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-table-delete"
+                                onClick={() => handlePriceListDelete(p.id)}
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
+
 }

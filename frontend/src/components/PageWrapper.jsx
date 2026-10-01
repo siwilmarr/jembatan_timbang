@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { startAutoSync } from "../services/syncService";
+import { API_BASE_URL } from "../config/env";
+import { db } from "../db/db";
 import PrintReceipt from "./PrintReceipt";
+import PrintKwitansi from "./PrintKwitansi";
 
 export default function PageWrapper({ children, requireAdmin = false }) {
   const router = useRouter();
@@ -12,8 +15,10 @@ export default function PageWrapper({ children, requireAdmin = false }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [printTx, setPrintTx] = useState(null);
+  const [printMode, setPrintMode] = useState("ticket"); // 'ticket' | 'kwitansi'
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAdminMenuExpanded, setIsAdminMenuExpanded] = useState(false);
+  const [siteProfile, setSiteProfile] = useState(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("user_token");
@@ -46,14 +51,77 @@ export default function PageWrapper({ children, requireAdmin = false }) {
   }, [token]);
 
   useEffect(() => {
+    if (!token) return;
+    const loadProfile = async () => {
+      try {
+        if (typeof window !== "undefined" && db?.site_profile) {
+          const cached = await db.site_profile.get(1);
+          if (cached) setSiteProfile(cached);
+        }
+        const res = await fetch(`${API_BASE_URL}/site-profile/`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Token ${token}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSiteProfile(data);
+          if (typeof window !== "undefined" && db?.site_profile) {
+            await db.site_profile.put(data);
+          }
+        }
+      } catch (e) {
+        // Silently handle offline/error
+      }
+    };
+    loadProfile();
+
+    const handleProfileUpdate = () => {
+      loadProfile();
+    };
+    window.addEventListener("site_profile_updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("site_profile_updated", handleProfileUpdate);
+    };
+  }, [token]);
+
+  useEffect(() => {
     window.printTransaction = (tx) => {
+      setPrintMode("ticket");
       setPrintTx(tx);
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("print-mode-kwitansi");
+        document.body.classList.add("print-mode-thermal");
+      }
       setTimeout(() => {
         window.print();
       }, 100);
     };
+
+    window.printKwitansi = (tx) => {
+      setPrintMode("kwitansi");
+      setPrintTx(tx);
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("print-mode-thermal");
+        document.body.classList.add("print-mode-kwitansi");
+      }
+      setTimeout(() => {
+        window.print();
+      }, 100);
+    };
+
+    const handleAfterPrint = () => {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("print-mode-thermal", "print-mode-kwitansi");
+      }
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+
     return () => {
       delete window.printTransaction;
+      delete window.printKwitansi;
+      window.removeEventListener("afterprint", handleAfterPrint);
     };
   }, []);
 
@@ -181,8 +249,10 @@ export default function PageWrapper({ children, requireAdmin = false }) {
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("customers")}>🤝 Kelola Customer/Supplier</button>
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("weighing-types")}>⚖️ Jenis Timbangan</button>
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("scales")}>🔌 Alat Timbangan</button>
+                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("profile")}>🏢 Profil Perusahaan</button>
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("database")}>⚙️ Konfigurasi Database</button>
                     </div>
+
                   )}
                 </div>
               )}
@@ -211,7 +281,13 @@ export default function PageWrapper({ children, requireAdmin = false }) {
         {/* Area Konten Utama */}
         <main className="main-content">{children}</main>
       </div>
-      <PrintReceipt transaction={printTx} />
+      {printMode === "ticket" && (
+        <PrintReceipt transaction={printTx} siteProfile={siteProfile} />
+      )}
+      {printMode === "kwitansi" && (
+        <PrintKwitansi transaction={printTx} siteProfile={siteProfile} />
+      )}
     </>
+
   );
 }

@@ -174,8 +174,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # nanti tidak akan bisa akses API. Dibaca dari env var (pisahkan dengan koma).
 CORS_ALLOWED_ORIGINS = config(
     "DJANGO_CORS_ALLOWED_ORIGINS",
-    default="http://localhost:5173"
+    default="http://localhost:5173,http://localhost:3000,http://127.0.0.1:3000"
 ).split(",")
+
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # FIXED: sebelumnya tidak ada DEFAULT_PERMISSION_CLASSES sama sekali, artinya
 # DRF pakai default AllowAny — SIAPA SAJA yang bisa akses network backend bisa

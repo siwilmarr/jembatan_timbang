@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale, SiteProfile, PriceList
 from django.contrib.auth.models import User
 from .serializers import (
     WeighingTransactionSerializer,
@@ -17,6 +17,8 @@ from .serializers import (
     CustomerSupplierSerializer,
     WeighingTypeSerializer,
     WeighingScaleSerializer,
+    SiteProfileSerializer,
+    PriceListSerializer,
 )
 from .permissions import IsAdminOrReadOnly, IsAdminOrReadOnlyMaster, IsAdminUserOnly
 
@@ -363,4 +365,86 @@ class DatabaseConfigView(APIView):
                 "success": True
             },
             status=status.HTTP_200_OK
+        )
+
+
+class SiteProfileView(APIView):
+    """
+    Endpoint singleton profil perusahaan pemilik timbangan:
+      GET /api/site-profile/  -> Ambil profil perusahaan
+      PUT /api/site-profile/  -> Update profil perusahaan (hanya Admin)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = SiteProfile.get_instance()
+        if profile is None:
+            return Response({})
+        return Response(SiteProfileSerializer(profile).data)
+
+    def put(self, request):
+        if not request.user.is_superuser and not request.user.groups.filter(name="Admin").exists():
+            return Response(
+                {"detail": "Hanya admin yang dapat mengubah profil perusahaan."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        profile = SiteProfile.get_instance()
+        serializer = SiteProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class SiteProfileViewSet(viewsets.ModelViewSet):
+    """
+    CRUD Endpoint daftar profil perusahaan / PT pemilik timbangan:
+      GET    /api/site-profiles/       -> List semua PT
+      POST   /api/site-profiles/       -> Tambah PT baru
+      PUT    /api/site-profiles/<id>/  -> Edit PT
+      DELETE /api/site-profiles/<id>/  -> Hapus PT
+    """
+    queryset = SiteProfile.objects.all().order_by("id")
+    serializer_class = SiteProfileSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+
+class PriceListViewSet(viewsets.ModelViewSet):
+    """
+    CRUD Endpoint Master Harga per kg berdasarkan jenis muatan dan tanggal efektif:
+      GET    /api/price-lists/        -> List semua master harga
+      POST   /api/price-lists/        -> Tambah harga baru
+      PUT    /api/price-lists/<id>/   -> Edit harga
+      DELETE /api/price-lists/<id>/   -> Hapus harga
+      GET    /api/price-lists/active/?cargo_name=...&date=... -> Ambil harga aktif
+    """
+    queryset = PriceList.objects.all().order_by("-effective_date", "-created_at")
+    serializer_class = PriceListSerializer
+    permission_classes = [IsAdminOrReadOnlyMaster]
+    pagination_class = None
+
+    @action(detail=False, methods=["get"], url_path="active")
+    def get_active_price(self, request):
+        cargo_name = request.query_params.get("cargo_name", "").strip()
+        date_str = request.query_params.get("date", "").strip()
+
+        if not cargo_name:
+            return Response(
+                {"detail": "Parameter cargo_name diperlukan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils.dateparse import parse_date
+        from django.utils import timezone
+
+        target_date = parse_date(date_str) if date_str else timezone.now().date()
+        if not target_date:
+            target_date = timezone.now().date()
+
+        price_obj = PriceList.get_price_for(cargo_name, target_date)
+        if price_obj:
+            return Response(PriceListSerializer(price_obj).data)
+        return Response(
+            {"detail": "Harga tidak ditemukan untuk jenis muatan dan tanggal tersebut.", "price_per_kg": None},
+            status=status.HTTP_404_NOT_FOUND,
         )

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User, Group
-from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale
+from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale, SiteProfile, PriceList
 
 
 from django.utils.html import strip_tags
@@ -80,6 +80,11 @@ class WeighingTypeSerializer(serializers.ModelSerializer):
 class WeighingTransactionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField()
     warehouse_name = serializers.ReadOnlyField(source="warehouse.name", default=None)
+    site_profile_id = serializers.PrimaryKeyRelatedField(
+        source="site_profile",
+        queryset=SiteProfile.objects.all(),
+        required=False, allow_null=True
+    )
 
     class Meta:
         model = WeighingTransaction
@@ -101,15 +106,23 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
             "sync_status",
             "unit",
             "customer_supplier",
+            "customer_address",
+            "harga_per_kg",
+            "total_harga",
             "weighing_type",
             "deduction_percent",
             "berat_potongan_kg",
+            "site_profile_id",
+            "site_profile_name",
+            "site_profile_address",
+            "site_profile_phone",
+            "site_profile_npwp",
         ]
         read_only_fields = ["created_at_server", "sync_status", "berat_bersih_kg", "pasangan", "berat_potongan_kg"]
 
     def validate(self, attrs):
         # Sanitize all incoming string input fields from potential XSS injection
-        string_fields = ["nomor_polisi", "nama_driver", "jenis_muatan", "tujuan", "operator", "unit", "customer_supplier", "weighing_type"]
+        string_fields = ["nomor_polisi", "nama_driver", "jenis_muatan", "tujuan", "operator", "unit", "customer_supplier", "customer_address", "weighing_type"]
         for field in string_fields:
             if field in attrs and isinstance(attrs[field], str):
                 attrs[field] = strip_tags(attrs[field]).strip()
@@ -222,3 +235,31 @@ class UserSerializer(serializers.ModelSerializer):
             profile.save()
             
         return instance
+
+
+class SiteProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SiteProfile
+        fields = [
+            "id",
+            "company_name",
+            "address",
+            "phone",
+            "email",
+            "website",
+            "npwp",
+        ]
+
+
+class PriceListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceList
+        fields = [
+            "id",
+            "cargo_name",
+            "price_per_kg",
+            "effective_date",
+            "note",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]

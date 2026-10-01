@@ -12,6 +12,9 @@ from .views import (
     CustomerSupplierViewSet,
     WeighingTypeViewSet,
     WeighingScaleViewSet,
+    SiteProfileView,
+    SiteProfileViewSet,
+    PriceListViewSet,
 )
 
 router = DefaultRouter()
@@ -24,8 +27,14 @@ router.register(r"units", UnitViewSet, basename="unit")
 router.register(r"customers", CustomerSupplierViewSet, basename="customer")
 router.register(r"weighing-types", WeighingTypeViewSet, basename="weighing-type")
 router.register(r"scales", WeighingScaleViewSet, basename="scale")
+router.register(r"site-profiles", SiteProfileViewSet, basename="site-profile-list")
+router.register(r"price-lists", PriceListViewSet, basename="price-list")
+router.register(r"price-list", PriceListViewSet, basename="price-list-alt")
 
 urlpatterns = [
     path("login/", CustomObtainAuthToken.as_view(), name="login"),
     path("db-config/", DatabaseConfigView.as_view(), name="db-config"),
+    path("site-profile/", SiteProfileView.as_view(), name="site-profile"),
 ] + router.urls
+
+

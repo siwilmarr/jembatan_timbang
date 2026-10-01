@@ -17,6 +17,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     tujuan: "",
     unit: "",
     customer_supplier: "",
+    customer_address: "",
+    harga_per_kg: "",
     weighing_type: "",
   });
   const [error, setError] = useState("");
@@ -192,6 +194,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                 berat_potongan_kg: serverTx.berat_potongan_kg ? Number(serverTx.berat_potongan_kg) : null,
                 unit: serverTx.unit || "",
                 customer_supplier: serverTx.customer_supplier || "",
+                customer_address: serverTx.customer_address || "",
+                harga_per_kg: serverTx.harga_per_kg ? Number(serverTx.harga_per_kg) : 0,
+                total_harga: serverTx.total_harga ? Number(serverTx.total_harga) : 0,
                 weighing_type: serverTx.weighing_type || "",
                 deduction_percent: serverTx.deduction_percent ? Number(serverTx.deduction_percent) : 0,
                 pasangan: serverTx.pasangan || null,
@@ -219,6 +224,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                 berat_potongan_kg: serverTx.berat_potongan_kg ? Number(serverTx.berat_potongan_kg) : null,
                 unit: serverTx.unit || "",
                 customer_supplier: serverTx.customer_supplier || "",
+                customer_address: serverTx.customer_address || "",
+                harga_per_kg: serverTx.harga_per_kg ? Number(serverTx.harga_per_kg) : 0,
+                total_harga: serverTx.total_harga ? Number(serverTx.total_harga) : 0,
                 weighing_type: serverTx.weighing_type || "",
                 deduction_percent: serverTx.deduction_percent ? Number(serverTx.deduction_percent) : 0,
                 pasangan: serverTx.pasangan || null,
@@ -275,6 +283,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     return (
       tx.nomor_polisi.toLowerCase().includes(term) ||
       tx.nama_driver.toLowerCase().includes(term) ||
+      (tx.customer_supplier && tx.customer_supplier.toLowerCase().includes(term)) ||
+      (tx.customer_address && tx.customer_address.toLowerCase().includes(term)) ||
       (tx.jenis_muatan && tx.jenis_muatan.toLowerCase().includes(term)) ||
       (tx.tujuan && tx.tujuan.toLowerCase().includes(term)) ||
       (tx.warehouse_name && tx.warehouse_name.toLowerCase().includes(term))
@@ -339,6 +349,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
       tujuan: tx.tujuan || "",
       unit: tx.unit || "",
       customer_supplier: tx.customer_supplier || "",
+      customer_address: tx.customer_address || "",
+      harga_per_kg: tx.harga_per_kg != null ? tx.harga_per_kg : "",
       weighing_type: tx.weighing_type || "",
     });
   };
@@ -364,13 +376,23 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
     setSuccess("");
 
     try {
+      const payload = {
+        ...editForm,
+        harga_per_kg: editForm.harga_per_kg ? parseFloat(editForm.harga_per_kg) : null,
+      };
+      if (editingTx.berat_bersih_kg && payload.harga_per_kg) {
+        payload.total_harga = Math.round(parseFloat(editingTx.berat_bersih_kg) * payload.harga_per_kg);
+      } else if (!payload.harga_per_kg) {
+        payload.total_harga = null;
+      }
+
       const res = await fetch(`${API_BASE}/weighing/${editingTx.id}/`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Token ${userToken}`,
         },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -386,6 +408,9 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
         tujuan: updatedData.tujuan,
         unit: updatedData.unit,
         customer_supplier: updatedData.customer_supplier,
+        customer_address: updatedData.customer_address,
+        harga_per_kg: updatedData.harga_per_kg,
+        total_harga: updatedData.total_harga,
         weighing_type: updatedData.weighing_type,
       });
 
@@ -728,6 +753,8 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                   <th>Berat (kg)</th>
                   <th>Potongan</th>
                   <th>Netto (kg)</th>
+                  <th>Harga/kg</th>
+                  <th>Total Bayar</th>
                   <th>Muatan</th>
                   <th>Tujuan</th>
                   <th>Operator</th>
@@ -751,7 +778,12 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                       <td className="font-semibold">{tx.nomor_polisi}</td>
                       <td>{tx.nama_driver || "-"}</td>
                       <td>{tx.unit || "-"}</td>
-                      <td>{tx.customer_supplier || "-"}</td>
+                      <td>
+                        <div className="font-semibold">{tx.customer_supplier || "-"}</div>
+                        {tx.customer_address && (
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>{tx.customer_address}</div>
+                        )}
+                      </td>
                       <td>
                         <span className={`badge-type badge-type--${tx.jenis_timbang}`}>
                           {tx.jenis_timbang === "gross" ? "Gross" : "Tare"}
@@ -762,6 +794,10 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                         {tx.berat_potongan_kg ? `${tx.berat_potongan_kg} kg` : "-"}
                       </td>
                       <td>{tx.berat_bersih_kg ? `${tx.berat_bersih_kg} kg` : "-"}</td>
+                      <td>{tx.harga_per_kg ? `Rp ${Number(tx.harga_per_kg).toLocaleString("id-ID")}` : "-"}</td>
+                      <td className="font-semibold" style={{ color: tx.total_harga ? "#059669" : "#64748b" }}>
+                        {tx.total_harga ? `Rp ${Number(tx.total_harga).toLocaleString("id-ID")}` : "-"}
+                      </td>
                       <td>{tx.jenis_muatan || "-"}</td>
                       <td>{tx.tujuan || "-"}</td>
                       <td><span className="text-muted">{tx.operator || "device"}</span></td>
@@ -776,8 +812,17 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                             type="button"
                             onClick={() => window.printTransaction?.(tx)}
                             className="btn-table-print"
+                            title="Cetak Tiket Timbang (Thermal)"
                           >
-                            Cetak
+                            Tiket
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => window.printKwitansi?.(tx)}
+                            className="btn-table-kwitansi"
+                            title="Cetak Kuitansi Formal"
+                          >
+                            Kuitansi
                           </button>
                           {isAdmin && (
                             <>
@@ -867,6 +912,26 @@ export default function HistoryDashboard({ userRole, userWarehouse }) {
                   type="text"
                   value={editForm.customer_supplier}
                   onChange={(e) => setEditForm({ ...editForm, customer_supplier: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Alamat Customer / PT
+                <input
+                  type="text"
+                  value={editForm.customer_address}
+                  onChange={(e) => setEditForm({ ...editForm, customer_address: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Harga per kg (Rp)
+                <input
+                  type="number"
+                  step="any"
+                  value={editForm.harga_per_kg}
+                  onChange={(e) => setEditForm({ ...editForm, harga_per_kg: e.target.value })}
+                  placeholder="Contoh: 2500"
                 />
               </label>
 

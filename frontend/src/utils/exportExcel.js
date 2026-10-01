@@ -18,11 +18,16 @@ export function exportTransactionsToExcel(transactions, filename = "riwayat-timb
     "Driver": sanitizeCell(tx.nama_driver),
     "Unit": sanitizeCell(tx.unit || "-"),
     "Customer/Supplier": sanitizeCell(tx.customer_supplier || "-"),
+    "Alamat PT": sanitizeCell(tx.customer_address || "-"),
+
+
     "Muatan": sanitizeCell(tx.jenis_muatan),
     "Jenis": tx.jenis_timbang === "gross" ? "Masuk (Gross)" : "Keluar (Tare)",
     "Berat (kg)": tx.berat_kg,
     "Potongan (kg)": tx.berat_potongan_kg ?? "-",
     "Berat Bersih (kg)": tx.berat_bersih_kg ?? "-",
+    "Harga / kg (Rp)": tx.harga_per_kg ? Number(tx.harga_per_kg) : "-",
+    "Total Bayar (Rp)": tx.total_harga ? Number(tx.total_harga) : "-",
     "Waktu Lokal": new Date(tx.created_at_local).toLocaleString("id-ID"),
     "Status": tx.sync_status === "synced" ? "Tersinkron" : "Pending",
   }));

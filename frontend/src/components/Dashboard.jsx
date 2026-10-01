@@ -115,7 +115,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
 
   return (
     <>
-      <div id="dashboard-root" className="dashboard">
+      <div id="dashboard-root" className="dashboard dashboard--compact">
         <header className="dashboard__header">
           <h1>Jembatan Timbang</h1>
           <SyncStatus pendingCount={pendingCount} />
@@ -303,9 +303,24 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           }}
         />
 
-        <div className="dashboard__actions">
+        <div className="dashboard__actions" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
           {lastSaved && (
-            <button onClick={() => window.printTransaction?.(lastSaved)}>Cetak Tiket Timbang</button>
+            <>
+              <button
+                type="button"
+                className="btn-print-ticket"
+                onClick={() => window.printTransaction?.(lastSaved)}
+              >
+                🖨️ Cetak Tiket Timbang
+              </button>
+              <button
+                type="button"
+                className="btn-print-kwitansi"
+                onClick={() => window.printKwitansi?.(lastSaved)}
+              >
+                🧾 Cetak Kuitansi
+              </button>
+            </>
           )}
         </div>
       </div>

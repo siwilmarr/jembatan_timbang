@@ -1728,12 +1728,22 @@ select:focus {
 .history-dashboard__filters label {
   flex: 1;
   min-width: 180px;
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
   gap: 0.4rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: #475569;
+}
+
+.history-dashboard__filters label > input,
+.history-dashboard__filters label > input[type="date"],
+.history-dashboard__filters label > select {
+  flex: none !important;
+  width: 100% !important;
+  min-width: 0;
 }
 
 .btn-reset-data {

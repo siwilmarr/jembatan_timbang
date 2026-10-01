@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import WeighingTransaction, Warehouse, UserProfile, Destination, Cargo, Unit, CustomerSupplier, WeighingType, WeighingScale
+from .models import WeighingTransaction, Warehouse, UserProfile, Destination, Cargo, Unit, CustomerSupplier, WeighingType, WeighingScale, SiteProfile, PriceList
 
 
 class UserProfileInline(admin.StackedInline):
@@ -86,3 +86,16 @@ class WeighingTransactionAdmin(admin.ModelAdmin):
     list_filter = ("jenis_timbang", "sync_status", "warehouse")
     search_fields = ("nomor_polisi", "nama_driver", "tujuan")
 
+
+@admin.register(SiteProfile)
+class SiteProfileAdmin(admin.ModelAdmin):
+    list_display = ("id", "company_name", "phone", "email", "npwp")
+    search_fields = ("company_name", "npwp", "email")
+
+
+@admin.register(PriceList)
+class PriceListAdmin(admin.ModelAdmin):
+    list_display = ("id", "cargo_name", "price_per_kg", "effective_date", "note", "created_at")
+    list_filter = ("cargo_name", "effective_date")
+    search_fields = ("cargo_name", "note")
+    ordering = ("-effective_date", "-created_at")

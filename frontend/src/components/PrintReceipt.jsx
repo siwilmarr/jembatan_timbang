@@ -28,6 +28,7 @@ export default function PrintReceipt({ transaction, siteProfile }) {
     jenis_timbang,
     berat_kg,
     berat_bersih_kg,
+    gross_berat_kg,
     deduction_percent,
     harga_per_kg,
     total_harga,
@@ -44,8 +45,22 @@ export default function PrintReceipt({ transaction, siteProfile }) {
   const companyAddress = site_profile_address || siteProfile?.address || "";
   const companyPhone = site_profile_phone || siteProfile?.phone || "";
 
-  const numGross = jenis_timbang === "gross" ? Number(berat_kg || 0) : (berat_bersih_kg != null ? Number(berat_kg || 0) + Number(berat_bersih_kg || 0) : Number(berat_kg || 0));
-  const numTare = jenis_timbang === "tare" ? Number(berat_kg || 0) : null;
+  // Saat Tare: gross_berat_kg tersedia jika cetak dari form langsung
+  // Dari backend/riwayat: gross dihitung dari tare + netto
+  let numGross, numTare;
+  if (jenis_timbang === "gross") {
+    numGross = Number(berat_kg || 0);
+    numTare = null;
+  } else {
+    numTare = Number(berat_kg || 0);
+    if (gross_berat_kg != null) {
+      numGross = Number(gross_berat_kg);
+    } else if (berat_bersih_kg != null) {
+      numGross = numTare + Number(berat_bersih_kg);
+    } else {
+      numGross = numTare;
+    }
+  }
   const numNetto = berat_bersih_kg != null ? Number(berat_bersih_kg) : null;
   const numPotongan = Number(deduction_percent) || 0;
   const numHarga = Number(harga_per_kg) || 0;

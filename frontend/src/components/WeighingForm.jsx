@@ -385,11 +385,23 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
         calculatedTotal = Math.round(netto * hargaKgNum * 100) / 100;
       }
 
+      let nettoKg = null;
+      let grossBeratKg = null;
+      if (activeCycle && lockedWeight) {
+        const beratSebelum = Math.abs(lockedWeight - Number(activeCycle.berat_kg));
+        const maxDeduct = Math.max(Number(form.deduction_percent) || 0, Number(activeCycle.deduction_percent) || 0);
+        const pot = beratSebelum * (maxDeduct / 100);
+        nettoKg = beratSebelum - pot;
+        grossBeratKg = Number(activeCycle.berat_kg);
+      }
+
       const newTx = {
         id: uuidv4(), ...form,
         harga_per_kg: hargaKgNum,
         total_harga: calculatedTotal,
         berat_kg: lockedWeight,
+        berat_bersih_kg: nettoKg,
+        gross_berat_kg: grossBeratKg,
         operator: operatorUsername || "device",
         warehouse: userWarehouse?.id || null,
         warehouse_id: userWarehouse?.id || null,

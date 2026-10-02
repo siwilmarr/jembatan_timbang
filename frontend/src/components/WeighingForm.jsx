@@ -588,7 +588,30 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
                 <span>Nomor Polisi <span style={{ color: "#dc2626" }}>*</span></span>
               </div>
               <input name="nomor_polisi" value={form.nomor_polisi} onChange={handleChange} required placeholder="Contoh: B 1234 CD" />
+              {!activeCycle ? (
+                <span style={{
+                  fontSize: "0.76rem",
+                  color: "#64748b",
+                  lineHeight: 1.5,
+                  display: "block",
+                }}>
+                  Untuk timbang <strong>Keluar (Tare)</strong>, masukkan nomor polisi yang <strong>sama</strong> seperti saat timbang <strong>Masuk (Gross)</strong>.
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: "0.76rem",
+                  color: "#15803d",
+                  lineHeight: 1.5,
+                  display: "block",
+                  background: "#dcfce7",
+                  borderRadius: "6px",
+                  padding: "0.25rem 0.5rem",
+                }}>
+                  ✅ Siklus Gross terdeteksi! Simpan untuk menyelesaikan timbang Keluar (Tare).
+                </span>
+              )}
             </div>
+
 
             {/* 2. Unit Kendaraan */}
             <div className="weighing-form__field">

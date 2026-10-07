@@ -664,25 +664,26 @@ select:focus {
     display: none !important;
   }
 
-  /* Ukuran cetak khusus: 9 in x 5.5 in */
+  /* LX-310 narrow carriage: kertas 9.5 in, area isi dibatasi sekitar 7.8 in. */
   @page {
-    size: 9in 5.5in;
-    margin: 0;
+    size: 9.5in 5.5in;
+    margin: 0.12in 0.85in;
   }
 
   body.print-mode-thermal @page,
   body.print-mode-kwitansi @page {
-    size: 9in 5.5in;
-    margin: 0;
+    size: 9.5in 5.5in;
+    margin: 0.12in 0.85in;
   }
 
   .receipt-print {
     display: block !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 9in !important;
-    min-height: 5.5in !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
     box-sizing: border-box !important;
     background: #fff !important;
     color: #000 !important;
@@ -701,7 +702,8 @@ select:focus {
     padding: 8px 12px;
     box-sizing: border-box;
     width: 100%;
-    min-height: 5.5in;
+    min-height: 5.26in;
+    max-width: 100%;
     max-height: none;
     display: flex;
     flex-direction: column;
@@ -955,7 +957,9 @@ select:focus {
     background: #fff;
     border: 0;
     padding: 8px 12px 6px;
-    min-height: 5.5in;
+    width: 100%;
+    min-height: 5.26in;
+    max-width: 100%;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1174,7 +1178,8 @@ select:focus {
     margin: 0;
     box-sizing: border-box;
     width: 100%;
-    min-height: 5.5in;
+    min-height: 5.26in;
+    max-width: 100%;
     max-height: none;
     display: flex;
     flex-direction: column;

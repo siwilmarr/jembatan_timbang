@@ -5,6 +5,12 @@ import CasSimulator from "../simulator/CasSimulator";
 
 import { APP_MODE } from "../config/env";
 const MAX_DEBUG_ENTRIES = 50;
+const SERIAL_CONNECTION_EVENT = "serial-connection-state";
+
+function notifySerialConnectionState(connected) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SERIAL_CONNECTION_EVENT, { detail: { connected } }));
+}
 
 /**
  * Hook untuk membaca data berat dari indikator timbangan via Web Serial API
@@ -104,6 +110,7 @@ export function useSerial() {
       if (alreadyOpen) {
         setIsConnected(true);
         setError(null);
+        notifySerialConnectionState(true);
         return;
       }
 
@@ -126,6 +133,7 @@ export function useSerial() {
             portRef.current = port;
             setIsConnected(true);
             setError(null);
+            notifySerialConnectionState(true);
             pushDebugLog("info", "Port serial sudah aktif. Menggunakan koneksi yang ada.");
             readLoop(port);
             return;
@@ -152,6 +160,7 @@ export function useSerial() {
       portRef.current = port;
       setIsConnected(true);
       setError(null);
+      notifySerialConnectionState(true);
       zeroOffsetRef.current = 0;
       setTareWeight(0);
       pushDebugLog("info", "Port terbuka. Menunggu data masuk dari alat...");
@@ -206,6 +215,7 @@ export function useSerial() {
       }
 
       await testPort.open({ baudRate, dataBits, stopBits, parity });
+      notifySerialConnectionState(true);
 
       const decoder = new TextDecoder();
       const reader = testPort.readable.getReader();
@@ -232,6 +242,7 @@ export function useSerial() {
 
       await testPort.close();
       testPort = null;
+      notifySerialConnectionState(false);
 
       if (sawData && received.trim()) {
         setError(null);
@@ -254,6 +265,7 @@ export function useSerial() {
           // Port mungkin masih dibersihkan browser setelah read error.
         }
       }
+      notifySerialConnectionState(false);
       return { ok: false, reason: msg };
     }
   }, [connectSimulated, pushDebugLog]);
@@ -265,6 +277,7 @@ export function useSerial() {
     setIsStable(false);
     setError("Timbangan terputus (kabel/port tidak terdeteksi).");
     pushDebugLog("error", "Perangkat fisik terputus (kabel/USB tercabut).");
+    notifySerialConnectionState(false);
 
     readerRef.current = null;
     portRef.current = null;
@@ -338,6 +351,7 @@ export function useSerial() {
           portRef.current = null;
           setIsConnected(false);
           setIsStable(false);
+          notifySerialConnectionState(false);
         }
       }
     }
@@ -471,6 +485,7 @@ export function useSerial() {
       setIsConnected(false);
       setIsStable(false);
       setError(null);
+      notifySerialConnectionState(false);
       pushDebugLog("info", "Koneksi diputuskan.");
     }
   }, [pushDebugLog]);

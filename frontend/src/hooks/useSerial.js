@@ -167,6 +167,88 @@ export function useSerial() {
     }
   }, [connectSimulated, pushDebugLog]);
 
+  const testConnection = useCallback(async (options = {}) => {
+    const { baudRate = 9600, dataBits = 8, stopBits = 1, parity = "none" } = options;
+
+    if (APP_MODE === "demo") {
+      connectSimulated();
+      return { ok: true, mode: "demo" };
+    }
+
+    if (!("serial" in navigator)) {
+      const msg = "Browser tidak mendukung Web Serial API.";
+      setError(msg);
+      pushDebugLog("error", msg);
+      return { ok: false, reason: msg };
+    }
+
+    if (isConnectingRef.current || portRef.current) {
+      const msg = "Port sedang aktif. Putuskan koneksi dulu sebelum testing.";
+      setError(msg);
+      pushDebugLog("warn", msg);
+      return { ok: false, reason: msg };
+    }
+
+    try {
+      pushDebugLog("info", `Menguji koneksi serial dengan konfig: ${baudRate} baud, ${dataBits}N${stopBits}, parity=${parity}`);
+
+      let port = await navigator.serial.getPorts().then((ports) => ports[0] || null);
+      if (!port) {
+        port = await navigator.serial.requestPort();
+      }
+
+      if (!port) {
+        const msg = "Port tidak ditemukan.";
+        setError(msg);
+        pushDebugLog("error", msg);
+        return { ok: false, reason: msg };
+      }
+
+      await port.open({ baudRate, dataBits, stopBits, parity });
+
+      const decoder = new TextDecoder();
+      const reader = port.readable.getReader();
+      let received = "";
+      let sawData = false;
+
+      try {
+        const start = Date.now();
+        while (Date.now() - start < 1500) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            const text = decoder.decode(value, { stream: true });
+            received += text;
+            if (text.trim()) {
+              sawData = true;
+              break;
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      await port.close();
+
+      if (sawData && received.trim()) {
+        setError(null);
+        pushDebugLog("success", `Tes koneksi berhasil. Data diterima: ${JSON.stringify(received)}`);
+        return { ok: true, data: received };
+      }
+
+      const msg = "Tes koneksi gagal: tidak ada data valid yang diterima dari alat.";
+      setError(msg);
+      pushDebugLog("error", msg);
+      return { ok: false, reason: msg, data: received };
+    } catch (err) {
+      const msg = err?.message || "Gagal menguji koneksi serial.";
+      setError(msg);
+      pushDebugLog("error", `Tes koneksi gagal: ${msg}`);
+      return { ok: false, reason: msg };
+    }
+  }, [connectSimulated, pushDebugLog]);
+
   const handlePhysicalDisconnect = useCallback((event) => {
     if (event.target !== portRef.current) return;
 
@@ -368,6 +450,7 @@ export function useSerial() {
     connect,
     connectSimulated,
     disconnect,
+    testConnection,
     isConnected,
     weight,
     isStable,

@@ -15,6 +15,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
     connect,
     connectSimulated,
     disconnect,
+    testConnection,
     isConnected,
     weight,
     isStable,
@@ -109,6 +110,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           config={serialConfig}
           onChange={setSerialConfig}
           isConnected={isConnected}
+          onTestConnection={() => testConnection(serialConfig)}
         />
 
         {userRole?.includes("Admin") && (

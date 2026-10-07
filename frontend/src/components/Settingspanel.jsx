@@ -37,8 +37,10 @@ function saveSerialConfig(config) {
  * `config` & `onChange` dikontrol dari Dashboard.jsx (controlled component),
  * supaya Dashboard bisa langsung pakai `config` saat memanggil connect().
  */
-export default function SettingsPanel({ config, onChange, isConnected }) {
+export default function SettingsPanel({ config, onChange, isConnected, onTestConnection }) {
     const [open, setOpen] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null);
 
     // Saat pertama kali mount, baca config tersimpan dari localStorage
     // dan kirim ke parent (Dashboard) supaya connect() pakai nilai ini.
@@ -53,6 +55,20 @@ export default function SettingsPanel({ config, onChange, isConnected }) {
         const next = { ...config, [field]: value };
         saveSerialConfig(next);
         onChange?.(next);
+    };
+
+    const handleTest = async () => {
+        setTesting(true);
+        setTestResult(null);
+
+        try {
+            const result = await onTestConnection?.();
+            setTestResult(result || { ok: false, reason: "Tidak ada hasil tes." });
+        } catch (err) {
+            setTestResult({ ok: false, reason: err?.message || "Tes gagal." });
+        } finally {
+            setTesting(false);
+        }
     };
 
     return (
@@ -118,6 +134,23 @@ export default function SettingsPanel({ config, onChange, isConnected }) {
                             <option value="odd">Odd</option>
                         </select>
                     </label>
+
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.75rem" }}>
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={handleTest}
+                            disabled={testing || isConnected}
+                        >
+                            {testing ? "Menguji..." : "Test Koneksi"}
+                        </button>
+                    </div>
+
+                    {testResult && (
+                        <p className={`settings-panel__hint ${testResult.ok ? "settings-panel__hint--ok" : "settings-panel__hint--error"}`}>
+                            {testResult.ok ? "Koneksi serial berfungsi. Data dari alat diterima." : `Tes gagal: ${testResult.reason || "Cek konfigurasi serial."}`}
+                        </p>
+                    )}
 
                     {isConnected && (
                         <p className="settings-panel__hint">

@@ -15,6 +15,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
     connect,
     connectSimulated,
     disconnect,
+    testConnection,
     isConnected,
     weight,
     isStable,
@@ -89,26 +90,10 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
     };
   }, []);
 
-  // Auto-connect ke port serial yang sudah pernah diotorisasi saat pertama kali mount
-  useEffect(() => {
-    const tryAutoConnect = async () => {
-      if (APP_MODE === "demo" || isTestingMode) {
-        connectSimulated();
-      } else if ("serial" in navigator) {
-        try {
-          const approved = await navigator.serial.getPorts();
-          if (approved && approved.length > 0) {
-            connect(effectiveSerialConfig, false);
-          }
-        } catch (e) {
-          console.warn("Serial auto-connect failed:", e);
-        }
-      }
-    };
-    tryAutoConnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTestingMode]);
-
+  // Auto-connect dinonaktifkan: port serial tidak aman untuk dibuka otomatis
+  // setelah hard reload karena browser bisa masih menyimpan state port lama.
+  // Semua koneksi serial harus dipicu secara eksplisit oleh user untuk
+  // mencegah race condition dan error "Port is already open".
   const handleLock = () => {
     if (isStable) setLockedWeight(tareWeight !== 0 ? netWeight : weight);
   };
@@ -125,6 +110,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           config={serialConfig}
           onChange={setSerialConfig}
           isConnected={isConnected}
+          onTestConnection={() => testConnection(serialConfig)}
         />
 
         {userRole?.includes("Admin") && (

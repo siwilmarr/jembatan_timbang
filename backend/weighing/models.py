@@ -13,8 +13,10 @@ class Warehouse(models.Model):
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
     def __str__(self):
         return f"{self.user.username} - {self.warehouse.name if self.warehouse else 'No Warehouse'}"
@@ -36,6 +38,7 @@ class Cargo(models.Model):
 
 class Unit(models.Model):
     """Master jenis/tipe kendaraan (contoh: Fuso, Tronton, Dump Truck)."""
+
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, default="")
 
@@ -45,6 +48,7 @@ class Unit(models.Model):
 
 class CustomerSupplier(models.Model):
     """Master data pelanggan (customer) atau pemasok (supplier)."""
+
     TYPE_CHOICES = [
         ("customer", "Customer"),
         ("supplier", "Supplier"),
@@ -64,23 +68,38 @@ class WeighingType(models.Model):
     Master jenis timbangan beserta konfigurasi spesifik per tipe.
     Contoh: Kelapa Sawit (potongan 3%), Pupuk (tanpa potongan), dst.
     """
+
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, default="")
     # Potongan berat otomatis dalam persen (0-100). Misal: 3.5 = 3.5%
     deduction_percent = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0,
-        help_text="Potongan berat otomatis dalam persen (0 = tidak ada potongan)"
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Potongan berat otomatis dalam persen (0 = tidak ada potongan)",
     )
     # Validasi field wajib diisi oleh operator
-    require_driver = models.BooleanField(default=True, help_text="Nama driver wajib diisi")
-    require_destination = models.BooleanField(default=True, help_text="Tujuan wajib diisi")
-    require_cargo = models.BooleanField(default=True, help_text="Jenis muatan wajib diisi")
-    require_customer = models.BooleanField(default=False, help_text="Customer/Supplier wajib diisi")
-    require_unit = models.BooleanField(default=False, help_text="Jenis unit kendaraan wajib diisi")
+    require_driver = models.BooleanField(
+        default=True, help_text="Nama driver wajib diisi"
+    )
+    require_destination = models.BooleanField(
+        default=True, help_text="Tujuan wajib diisi"
+    )
+    require_cargo = models.BooleanField(
+        default=True, help_text="Jenis muatan wajib diisi"
+    )
+    require_customer = models.BooleanField(
+        default=False, help_text="Customer/Supplier wajib diisi"
+    )
+    require_unit = models.BooleanField(
+        default=False, help_text="Jenis unit kendaraan wajib diisi"
+    )
     # Batas berat kendaraan maksimal (0 = tidak dibatasi)
     max_weight_kg = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0,
-        help_text="Batas berat kendaraan maksimal dalam kg (0 = tidak dibatasi)"
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Batas berat kendaraan maksimal dalam kg (0 = tidak dibatasi)",
     )
     is_active = models.BooleanField(default=True)
 
@@ -93,12 +112,15 @@ class WeighingScale(models.Model):
     Master alat timbangan fisik (indikator) beserta spesifikasi protokol serial.
     Contoh: Timbangan 01 (CAS - 9600 baud), Timbangan 02 (GSC - 4800 baud), dst.
     """
+
     INDICATOR_CHOICES = [
         ("CAS", "CAS (Format Detail)"),
         ("GSC", "GSC (Format Sederhana)"),
     ]
     name = models.CharField(max_length=100, unique=True)
-    indicator_type = models.CharField(max_length=10, choices=INDICATOR_CHOICES, default="CAS")
+    indicator_type = models.CharField(
+        max_length=10, choices=INDICATOR_CHOICES, default="CAS"
+    )
     baud_rate = models.IntegerField(default=9600)
     data_bits = models.IntegerField(default=8)
     stop_bits = models.IntegerField(default=1)
@@ -134,21 +156,35 @@ class WeighingTransaction(models.Model):
     jenis_muatan = models.CharField(max_length=100, blank=True)
     tujuan = models.CharField(max_length=100, blank=True)
     jenis_timbang = models.CharField(max_length=10, choices=JENIS_TIMBANG)
-    warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.SET_NULL)
+    warehouse = models.ForeignKey(
+        Warehouse, null=True, blank=True, on_delete=models.SET_NULL
+    )
 
     # Fields added for new master configurations
     unit = models.CharField(max_length=100, blank=True, default="")
     customer_supplier = models.CharField(max_length=100, blank=True, default="")
     customer_address = models.TextField(blank=True, default="")
-    harga_per_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
-    total_harga = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, null=True, blank=True)
+    harga_per_kg = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.00, null=True, blank=True
+    )
+    total_harga = models.DecimalField(
+        max_digits=15, decimal_places=2, default=0.00, null=True, blank=True
+    )
     weighing_type = models.CharField(max_length=100, blank=True, default="")
-    deduction_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    berat_potongan_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    deduction_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.00
+    )
+    berat_potongan_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
 
     # Profil perusahaan yang dipilih saat penimbangan (snapshot)
     site_profile = models.ForeignKey(
-        "SiteProfile", null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
+        "SiteProfile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transactions",
     )
     site_profile_name = models.CharField(max_length=200, blank=True, default="")
     site_profile_address = models.TextField(blank=True, default="")
@@ -156,6 +192,9 @@ class WeighingTransaction(models.Model):
     site_profile_npwp = models.CharField(max_length=50, blank=True, default="")
 
     berat_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    berat_tara_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
     berat_bersih_kg = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )  # diisi kalau sudah ada pasangan gross/tare
@@ -229,7 +268,9 @@ class WeighingTransaction(models.Model):
             # Kunci ulang diri sendiri di dalam transaksi yang sama, untuk jaga-jaga
             # kalau request paralel lain sudah keburu memasangkan `self` duluan
             # di antara pengecekan pasangan_id di atas dan titik ini.
-            self_locked = WeighingTransaction.objects.select_for_update().get(pk=self.pk)
+            self_locked = WeighingTransaction.objects.select_for_update().get(
+                pk=self.pk
+            )
             if self_locked.pasangan_id is not None:
                 return
 
@@ -238,7 +279,9 @@ class WeighingTransaction(models.Model):
 
             # Hitung berat bersih setelah potongan otomatis
             berat_bersih_sebelum_potongan = abs(gross_tx.berat_kg - tare_tx.berat_kg)
-            deduction_percent = max(gross_tx.deduction_percent or 0, tare_tx.deduction_percent or 0)
+            deduction_percent = max(
+                gross_tx.deduction_percent or 0, tare_tx.deduction_percent or 0
+            )
             berat_potongan = berat_bersih_sebelum_potongan * (deduction_percent / 100)
             berat_bersih = berat_bersih_sebelum_potongan - berat_potongan
 
@@ -255,7 +298,9 @@ class WeighingTransaction(models.Model):
             cust_addr = gross_tx.customer_address or tare_tx.customer_address or ""
             sp = gross_tx.site_profile or tare_tx.site_profile
             sp_name = gross_tx.site_profile_name or tare_tx.site_profile_name or ""
-            sp_address = gross_tx.site_profile_address or tare_tx.site_profile_address or ""
+            sp_address = (
+                gross_tx.site_profile_address or tare_tx.site_profile_address or ""
+            )
             sp_phone = gross_tx.site_profile_phone or tare_tx.site_profile_phone or ""
             sp_npwp = gross_tx.site_profile_npwp or tare_tx.site_profile_npwp or ""
             total_bayar = round(berat_bersih * harga_kg, 2) if harga_kg else 0
@@ -294,6 +339,7 @@ class SiteProfile(models.Model):
     Profil perusahaan pemilik jembatan timbang (singleton).
     Data ini dicetak sebagai kop/header pada kwitansi/struk penimbangan.
     """
+
     company_name = models.CharField(max_length=200, default="JEMBATAN TIMBANG")
     address = models.TextField(blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
@@ -319,22 +365,20 @@ class PriceList(models.Model):
     Master harga per kg berdasarkan jenis muatan dan tanggal efektif.
     Sistem otomatis memilih harga yang berlaku pada tanggal transaksi.
     """
+
     cargo_name = models.CharField(
         max_length=100,
         verbose_name="Jenis Muatan",
-        help_text="Nama jenis muatan (harus sesuai dengan yang diinput di form timbang)"
+        help_text="Nama jenis muatan (harus sesuai dengan yang diinput di form timbang)",
     )
     price_per_kg = models.DecimalField(
-        max_digits=14, decimal_places=2,
-        verbose_name="Harga per kg (Rp)"
+        max_digits=14, decimal_places=2, verbose_name="Harga per kg (Rp)"
     )
     effective_date = models.DateField(
-        verbose_name="Berlaku Mulai",
-        help_text="Harga berlaku mulai tanggal ini"
+        verbose_name="Berlaku Mulai", help_text="Harga berlaku mulai tanggal ini"
     )
     note = models.CharField(
-        max_length=255, blank=True, default="",
-        verbose_name="Catatan"
+        max_length=255, blank=True, default="", verbose_name="Catatan"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -354,8 +398,9 @@ class PriceList(models.Model):
         yang tidak melebihi on_date.
         """
         return (
-            cls.objects
-            .filter(cargo_name__iexact=cargo_name, effective_date__lte=on_date)
+            cls.objects.filter(
+                cargo_name__iexact=cargo_name, effective_date__lte=on_date
+            )
             .order_by("-effective_date", "-created_at")
             .first()
         )

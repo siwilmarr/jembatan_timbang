@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSerial } from "../hooks/useSerial";
-import { getPendingTransactions } from "../db/db";
+import { cacheSyncedTransactionLocally, db, getPendingTransactions } from "../db/db";
 import { syncPendingTransactions } from "../services/syncService";
 import { APP_MODE, API_BASE_URL } from "../config/env";
 import WeighingForm from "./WeighingForm";
@@ -34,6 +34,8 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
   const [lockedWeight, setLockedWeight] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastSaved, setLastSaved] = useState(null);
+  const [pendingSecondWeigh, setPendingSecondWeigh] = useState([]);
+  const [selectedPendingTransaction, setSelectedPendingTransaction] = useState(null);
   const [isTestingMode, setIsTestingMode] = useState(false);
 
   // Master Alat Timbangan
@@ -42,6 +44,33 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
 
   const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
   const headers = { "Content-Type": "application/json", Authorization: `Token ${userToken}` };
+
+  const refreshPendingSecondWeigh = async () => {
+    try {
+      if (navigator.onLine && userToken) {
+        const response = await fetch(`${API_BASE_URL}/weighing/pending-second-weigh/`, {
+          headers: { Authorization: `Token ${userToken}` },
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          const serverRows = Array.isArray(payload) ? payload : (payload.results || []);
+          await Promise.all(serverRows.map((transaction) => cacheSyncedTransactionLocally(transaction)));
+        }
+      }
+
+      const localRows = await db.weighing_transactions.toArray();
+      const pendingRows = localRows.filter((transaction) =>
+        transaction.jenis_timbang === "gross" &&
+        transaction.berat_tara_kg == null &&
+        transaction.berat_bersih_kg == null &&
+        transaction.pasangan == null
+      );
+      pendingRows.sort((a, b) => new Date(a.created_at_local) - new Date(b.created_at_local));
+      setPendingSecondWeigh(pendingRows);
+    } catch (error) {
+      console.error("Gagal memuat kendaraan yang menunggu timbang kedua:", error);
+    }
+  };
 
   // Fetch daftar alat timbangan aktif dari backend
   useEffect(() => {
@@ -77,8 +106,15 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
   useEffect(() => {
     const refreshPending = () => getPendingTransactions().then((rows) => setPendingCount(rows.length));
     refreshPending();
-    const interval = setInterval(refreshPending, 5000);
-    const handleOnline = () => { setIsOnline(true); };
+    refreshPendingSecondWeigh();
+    const interval = setInterval(() => {
+      refreshPending();
+      refreshPendingSecondWeigh();
+    }, 5000);
+    const handleOnline = () => {
+      setIsOnline(true);
+      refreshPendingSecondWeigh();
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
@@ -112,6 +148,26 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           isConnected={isConnected}
           onTestConnection={() => testConnection(serialConfig)}
         />
+
+        {pendingSecondWeigh.length > 0 && (
+          <details className="pending-second-weigh">
+            <summary>Menunggu timbang kedua <strong>{pendingSecondWeigh.length}</strong></summary>
+            <div className="pending-second-weigh__list">
+              {pendingSecondWeigh.map((transaction) => (
+                <button
+                  key={transaction.id}
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setSelectedPendingTransaction(transaction)}
+                >
+                  <strong>{transaction.nomor_polisi}</strong>
+                  <span>{Number(transaction.berat_kg || 0).toLocaleString("id-ID")} kg</span>
+                  <span>Timbang ke-2</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        )}
 
         {userRole?.includes("Admin") && (
           <DebugPanel
@@ -283,9 +339,12 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           lockedWeight={lockedWeight}
           operatorUsername={operatorUsername}
           userWarehouse={userWarehouse}
+          selectedPendingTransaction={selectedPendingTransaction}
           onSaved={(savedTx) => {
             setLockedWeight(null);
             setLastSaved(savedTx);
+            setSelectedPendingTransaction(null);
+            refreshPendingSecondWeigh();
           }}
         />
 

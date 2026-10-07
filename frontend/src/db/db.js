@@ -83,10 +83,27 @@ export { db };
  * yang bertanggung jawab mengirim ke server (lihat services/syncService.js).
  */
 export async function saveTransactionLocally(transaction) {
-  return db.weighing_transactions.add({
-    ...transaction,
-    sync_status: "pending",
-  });
+  const existing = await db.weighing_transactions.where("id").equals(transaction.id).first();
+  const updated = { ...existing, ...transaction, sync_status: "pending" };
+  if (existing) {
+    await db.weighing_transactions.update(existing.localId, updated);
+    return { ...updated, localId: existing.localId };
+  }
+  await db.weighing_transactions.add(updated);
+  return updated;
+}
+
+export async function cacheSyncedTransactionLocally(transaction) {
+  const existing = await db.weighing_transactions.where("id").equals(transaction.id).first();
+  if (existing?.sync_status === "pending") return existing;
+
+  const updated = { ...existing, ...transaction, sync_status: "synced" };
+  if (existing) {
+    await db.weighing_transactions.update(existing.localId, updated);
+    return { ...updated, localId: existing.localId };
+  }
+  await db.weighing_transactions.add(updated);
+  return updated;
 }
 
 export function getPendingTransactions() {

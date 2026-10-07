@@ -5,7 +5,19 @@ from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import WeighingTransaction, Warehouse, Destination, Cargo, UserProfile, Unit, CustomerSupplier, WeighingType, WeighingScale, SiteProfile, PriceList
+from .models import (
+    WeighingTransaction,
+    Warehouse,
+    Destination,
+    Cargo,
+    UserProfile,
+    Unit,
+    CustomerSupplier,
+    WeighingType,
+    WeighingScale,
+    SiteProfile,
+    PriceList,
+)
 from django.contrib.auth.models import User
 from .serializers import (
     WeighingTransactionSerializer,
@@ -25,12 +37,13 @@ from .permissions import IsAdminOrReadOnly, IsAdminOrReadOnlyMaster, IsAdminUser
 
 class CustomObtainAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data,
-                                           context={'request': request})
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
+        user = serializer.validated_data["user"]
         token, created = Token.objects.get_or_create(user=user)
-        roles = list(user.groups.values_list('name', flat=True))
+        roles = list(user.groups.values_list("name", flat=True))
         if user.is_superuser and "Admin" not in roles:
             roles.append("Admin")
 
@@ -45,14 +58,16 @@ class CustomObtainAuthToken(ObtainAuthToken):
         except UserProfile.DoesNotExist:
             pass
 
-        return Response({
-            'token': token.key,
-            'user_id': user.pk,
-            'username': user.username,
-            'roles': roles,
-            'warehouse_id': warehouse_id,
-            'warehouse_name': warehouse_name,
-        })
+        return Response(
+            {
+                "token": token.key,
+                "user_id": user.pk,
+                "username": user.username,
+                "roles": roles,
+                "warehouse_id": warehouse_id,
+                "warehouse_name": warehouse_name,
+            }
+        )
 
 
 class WeighingTransactionViewSet(viewsets.ModelViewSet):
@@ -83,6 +98,16 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
         if wh:
             queryset = queryset.filter(warehouse_id=wh)
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="pending-second-weigh")
+    def pending_second_weigh(self, request):
+        queryset = self.get_queryset().filter(
+            jenis_timbang="gross",
+            berat_tara_kg__isnull=True,
+            berat_bersih_kg__isnull=True,
+            pasangan__isnull=True,
+        )
+        return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=False, methods=["post"], url_path="sync")
     def sync(self, request):
@@ -127,7 +152,9 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
 
         if not gte or not lte:
             return Response(
-                {"detail": "Parameter created_at_local_gte dan created_at_local_lte wajib diisi."},
+                {
+                    "detail": "Parameter created_at_local_gte dan created_at_local_lte wajib diisi."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -228,6 +255,7 @@ from rest_framework.views import APIView
 from django.conf import settings
 from django.db import connections
 
+
 class DatabaseConfigView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUserOnly]
 
@@ -273,7 +301,7 @@ class DatabaseConfigView(APIView):
             if not req_data.get(field):
                 return Response(
                     {"detail": f"Field '{field}' wajib diisi."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Retrieve old password if current password is empty or masked
@@ -306,12 +334,12 @@ class DatabaseConfigView(APIView):
             "django.db.backends.postgresql",
             "django.db.backends.mysql",
             "django.db.backends.sqlite3",
-            "django.db.backends.oracle"
+            "django.db.backends.oracle",
         ]
         if new_config["ENGINE"] not in valid_engines:
             return Response(
                 {"detail": "Engine database tidak valid."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Test database connection dynamically
@@ -321,15 +349,14 @@ class DatabaseConfigView(APIView):
         test_config = dict(new_config)
         if test_config["ENGINE"] == "django.db.backends.sqlite3":
             from pathlib import Path
+
             db_path = Path(test_config["NAME"])
             if not db_path.is_absolute():
                 db_path = (settings.BASE_DIR / db_path).resolve()
             db_path.parent.mkdir(parents=True, exist_ok=True)
             test_config["NAME"] = str(db_path)
 
-        test_databases = {
-            DEFAULT_DB_ALIAS: test_config
-        }
+        test_databases = {DEFAULT_DB_ALIAS: test_config}
         test_connections = ConnectionHandler(test_databases)
 
         try:
@@ -338,11 +365,8 @@ class DatabaseConfigView(APIView):
             conn.close()
         except Exception as e:
             return Response(
-                {
-                    "detail": f"Koneksi gagal: {str(e)}",
-                    "success": False
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": f"Koneksi gagal: {str(e)}", "success": False},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Save config files
@@ -352,7 +376,7 @@ class DatabaseConfigView(APIView):
         except Exception as e:
             return Response(
                 {"detail": f"Gagal menulis file konfigurasi: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         # Apply settings dynamically to current process
@@ -362,9 +386,9 @@ class DatabaseConfigView(APIView):
         return Response(
             {
                 "detail": "Konfigurasi database berhasil disimpan dan diterapkan.",
-                "success": True
+                "success": True,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
@@ -374,6 +398,7 @@ class SiteProfileView(APIView):
       GET /api/site-profile/  -> Ambil profil perusahaan
       PUT /api/site-profile/  -> Update profil perusahaan (hanya Admin)
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -383,10 +408,13 @@ class SiteProfileView(APIView):
         return Response(SiteProfileSerializer(profile).data)
 
     def put(self, request):
-        if not request.user.is_superuser and not request.user.groups.filter(name="Admin").exists():
+        if (
+            not request.user.is_superuser
+            and not request.user.groups.filter(name="Admin").exists()
+        ):
             return Response(
                 {"detail": "Hanya admin yang dapat mengubah profil perusahaan."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
         profile = SiteProfile.get_instance()
         serializer = SiteProfileSerializer(profile, data=request.data, partial=True)
@@ -403,6 +431,7 @@ class SiteProfileViewSet(viewsets.ModelViewSet):
       PUT    /api/site-profiles/<id>/  -> Edit PT
       DELETE /api/site-profiles/<id>/  -> Hapus PT
     """
+
     queryset = SiteProfile.objects.all().order_by("id")
     serializer_class = SiteProfileSerializer
     permission_classes = [IsAdminOrReadOnlyMaster]
@@ -418,6 +447,7 @@ class PriceListViewSet(viewsets.ModelViewSet):
       DELETE /api/price-lists/<id>/   -> Hapus harga
       GET    /api/price-lists/active/?cargo_name=...&date=... -> Ambil harga aktif
     """
+
     queryset = PriceList.objects.all().order_by("-effective_date", "-created_at")
     serializer_class = PriceListSerializer
     permission_classes = [IsAdminOrReadOnlyMaster]
@@ -445,6 +475,9 @@ class PriceListViewSet(viewsets.ModelViewSet):
         if price_obj:
             return Response(PriceListSerializer(price_obj).data)
         return Response(
-            {"detail": "Harga tidak ditemukan untuk jenis muatan dan tanggal tersebut.", "price_per_kg": None},
+            {
+                "detail": "Harga tidak ditemukan untuk jenis muatan dan tanggal tersebut.",
+                "price_per_kg": None,
+            },
             status=status.HTTP_404_NOT_FOUND,
         )

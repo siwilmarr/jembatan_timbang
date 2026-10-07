@@ -41,6 +41,7 @@ export default function PrintReceipt({ transaction, siteProfile }) {
     unit,
     jenis_timbang,
     berat_kg,
+    berat_tara_kg,
     berat_bersih_kg,
     gross_berat_kg,
     deduction_percent,
@@ -62,7 +63,7 @@ export default function PrintReceipt({ transaction, siteProfile }) {
   let numGross, numTare;
   if (jenis_timbang === "gross") {
     numGross = Number(berat_kg || 0);
-    numTare = null;
+    numTare = berat_tara_kg == null ? null : Number(berat_tara_kg);
   } else {
     numTare = Number(berat_kg || 0);
     if (gross_berat_kg != null) {

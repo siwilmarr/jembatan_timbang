@@ -60,7 +60,7 @@ function parseNumberFromDots(val) {
   return isNaN(num) ? 0 : num;
 }
 
-export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, userWarehouse }) {
+export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, userWarehouse, selectedPendingTransaction }) {
   const [form, setForm] = useState({
     nomor_polisi: "",
     nama_driver: "",
@@ -195,7 +195,7 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
         const tx = await db.weighing_transactions
           .where("nomor_polisi")
           .equals(cleanPlate)
-          .filter(t => t.berat_bersih_kg === null || t.berat_bersih_kg === undefined)
+          .filter(t => t.jenis_timbang === "gross" && t.berat_tara_kg == null && t.berat_bersih_kg == null && t.pasangan == null)
           .first();
 
         if (active) {
@@ -239,6 +239,33 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
       active = false;
     };
   }, [form.nomor_polisi, weighingTypes]);
+
+  useEffect(() => {
+    if (!selectedPendingTransaction) return;
+    const tx = selectedPendingTransaction;
+    setActiveCycle(tx);
+    const previousType = weighingTypes.find((item) => item.name === tx.weighing_type) || null;
+    if (previousType) setSelectedWeighingType(previousType);
+    setForm((previous) => ({
+      ...previous,
+      nomor_polisi: tx.nomor_polisi || "",
+      nama_driver: tx.nama_driver || "",
+      jenis_muatan: tx.jenis_muatan || "",
+      tujuan: tx.tujuan || "",
+      jenis_timbang: "tare",
+      unit: tx.unit || "",
+      customer_supplier: tx.customer_supplier || "",
+      customer_address: tx.customer_address || "",
+      harga_per_kg: formatNumberWithDots(tx.harga_per_kg || ""),
+      weighing_type: tx.weighing_type || "",
+      deduction_percent: Number(tx.deduction_percent) || 0,
+      site_profile_id: tx.site_profile_id || null,
+      site_profile_name: tx.site_profile_name || "",
+      site_profile_address: tx.site_profile_address || "",
+      site_profile_phone: tx.site_profile_phone || "",
+      site_profile_npwp: tx.site_profile_npwp || "",
+    }));
+  }, [selectedPendingTransaction, weighingTypes]);
 
   const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -377,7 +404,7 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
     try {
       const hargaKgNum = parseNumberFromDots(form.harga_per_kg);
       let calculatedTotal = 0;
-      if (activeCycle && lockedWeight) {
+      if (activeCycle && lockedWeight !== null) {
         const beratSebelum = Math.abs(lockedWeight - Number(activeCycle.berat_kg));
         const maxDeduct = Math.max(Number(form.deduction_percent) || 0, Number(activeCycle.deduction_percent) || 0);
         const pot = beratSebelum * (maxDeduct / 100);
@@ -387,7 +414,7 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
 
       let nettoKg = null;
       let grossBeratKg = null;
-      if (activeCycle && lockedWeight) {
+      if (activeCycle && lockedWeight !== null) {
         const beratSebelum = Math.abs(lockedWeight - Number(activeCycle.berat_kg));
         const maxDeduct = Math.max(Number(form.deduction_percent) || 0, Number(activeCycle.deduction_percent) || 0);
         const pot = beratSebelum * (maxDeduct / 100);
@@ -396,17 +423,21 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
       }
 
       const newTx = {
-        id: uuidv4(), ...form,
+        ...(activeCycle || {}),
+        ...form,
+        id: activeCycle?.id || uuidv4(),
+        jenis_timbang: "gross",
         harga_per_kg: hargaKgNum,
         total_harga: calculatedTotal,
-        berat_kg: lockedWeight,
+        berat_kg: activeCycle ? Number(activeCycle.berat_kg) : lockedWeight,
+        berat_tara_kg: activeCycle ? lockedWeight : null,
         berat_bersih_kg: nettoKg,
         gross_berat_kg: grossBeratKg,
         operator: operatorUsername || "device",
-        warehouse: userWarehouse?.id || null,
-        warehouse_id: userWarehouse?.id || null,
-        warehouse_name: userWarehouse?.name || null,
-        created_at_local: getLocalISOString()
+        warehouse: userWarehouse?.id || activeCycle?.warehouse || null,
+        warehouse_id: userWarehouse?.id || activeCycle?.warehouse_id || null,
+        warehouse_name: userWarehouse?.name || activeCycle?.warehouse_name || null,
+        created_at_local: activeCycle?.created_at_local || getLocalISOString(),
       };
       await saveTransactionLocally(newTx);
 

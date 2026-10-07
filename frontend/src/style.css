@@ -664,16 +664,16 @@ select:focus {
     display: none !important;
   }
 
-  /* Ukuran cetak khusus: 9.5 in x 5.5 in */
+  /* Ukuran cetak khusus: 9 in x 5.5 in */
   @page {
-    size: 9.5in 5.5in;
-    margin: 0.12in;
+    size: 9in 5.5in;
+    margin: 0;
   }
 
   body.print-mode-thermal @page,
   body.print-mode-kwitansi @page {
-    size: 9.5in 5.5in;
-    margin: 0.12in;
+    size: 9in 5.5in;
+    margin: 0;
   }
 
   .receipt-print {
@@ -681,7 +681,7 @@ select:focus {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 9.5in !important;
+    width: 9in !important;
     min-height: 5.5in !important;
     box-sizing: border-box !important;
     background: #fff !important;
@@ -698,13 +698,11 @@ select:focus {
   }
 
   .ticket-border-box {
-    border: 2px solid #1e293b;
-    border-radius: 4px;
     padding: 8px 12px;
     box-sizing: border-box;
     width: 100%;
-    min-height: 5.15in;
-    max-height: 5.38in;
+    min-height: 5.5in;
+    max-height: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -955,9 +953,10 @@ select:focus {
 
   .ticket-formal-box {
     background: #fff;
-    border: 2px solid #000;
+    border: 0;
     padding: 8px 12px 6px;
-    min-height: 136mm;
+    min-height: 5.5in;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -1170,14 +1169,13 @@ select:focus {
   }
 
   .kuitansi-border-box {
-    border: 2.5px solid #0f3b75;
-    border-radius: 4px;
+    border: 0;
     padding: 10px 16px;
     margin: 0;
     box-sizing: border-box;
     width: 100%;
-    min-height: 5.15in;
-    max-height: 5.38in;
+    min-height: 5.5in;
+    max-height: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;

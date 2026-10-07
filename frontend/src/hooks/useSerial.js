@@ -189,25 +189,26 @@ export function useSerial() {
       return { ok: false, reason: msg };
     }
 
+    let testPort = null;
     try {
       pushDebugLog("info", `Menguji koneksi serial dengan konfig: ${baudRate} baud, ${dataBits}N${stopBits}, parity=${parity}`);
 
-      let port = await navigator.serial.getPorts().then((ports) => ports[0] || null);
-      if (!port) {
-        port = await navigator.serial.requestPort();
+      testPort = await navigator.serial.getPorts().then((ports) => ports[0] || null);
+      if (!testPort) {
+        testPort = await navigator.serial.requestPort();
       }
 
-      if (!port) {
+      if (!testPort) {
         const msg = "Port tidak ditemukan.";
         setError(msg);
         pushDebugLog("error", msg);
         return { ok: false, reason: msg };
       }
 
-      await port.open({ baudRate, dataBits, stopBits, parity });
+      await testPort.open({ baudRate, dataBits, stopBits, parity });
 
       const decoder = new TextDecoder();
-      const reader = port.readable.getReader();
+      const reader = testPort.readable.getReader();
       let received = "";
       let sawData = false;
 
@@ -229,7 +230,8 @@ export function useSerial() {
         reader.releaseLock();
       }
 
-      await port.close();
+      await testPort.close();
+      testPort = null;
 
       if (sawData && received.trim()) {
         setError(null);
@@ -245,6 +247,13 @@ export function useSerial() {
       const msg = err?.message || "Gagal menguji koneksi serial.";
       setError(msg);
       pushDebugLog("error", `Tes koneksi gagal: ${msg}`);
+      if (testPort?.readable || testPort?.writable) {
+        try {
+          await testPort.close();
+        } catch {
+          // Port mungkin masih dibersihkan browser setelah read error.
+        }
+      }
       return { ok: false, reason: msg };
     }
   }, [connectSimulated, pushDebugLog]);
@@ -293,6 +302,7 @@ export function useSerial() {
   const readLoop = async (port) => {
     const decoder = new TextDecoder();
     const reader = port.readable.getReader();
+    let readFailed = false;
     readerRef.current = reader;
 
     try {
@@ -307,10 +317,29 @@ export function useSerial() {
         }
       }
     } catch (err) {
+      readFailed = true;
       pushDebugLog("error", `Error saat membaca port: ${err.message}`);
       setError(err.message);
     } finally {
-      reader.releaseLock();
+      try {
+        reader.releaseLock();
+      } catch {
+        // Reader may already have been released during port teardown.
+      }
+
+      if (readerRef.current === reader) readerRef.current = null;
+
+      if (portRef.current === port && readFailed) {
+        try {
+          if (port.readable || port.writable) await port.close();
+        } catch (closeError) {
+          pushDebugLog("warn", `Port gagal ditutup setelah read error: ${closeError.message}`);
+        } finally {
+          portRef.current = null;
+          setIsConnected(false);
+          setIsStable(false);
+        }
+      }
     }
   };
 

@@ -40,6 +40,7 @@ export function useSerial() {
   const lastWeightRef = useRef(null);
   const simulateTimerRef = useRef(null);
   const indicatorTypeRef = useRef("CAS"); // default CAS
+  const isConnectingRef = useRef(false);
 
   // FORMAT 1 -- "detail" sesuai dokumentasi CAS/GSC tertulis:
   //   ST,GS,+001234kg   atau   ST,NT,+025430kg\r\n
@@ -94,10 +95,14 @@ export function useSerial() {
       return;
     }
 
-    if (portRef.current) {
-      setError("Sudah terhubung ke timbangan. Putuskan koneksi terlebih dahulu.");
+    if (isConnectingRef.current || portRef.current) {
+      if (portRef.current) {
+        setError("Sudah terhubung ke timbangan. Putuskan koneksi terlebih dahulu.");
+      }
       return;
     }
+
+    isConnectingRef.current = true;
 
     try {
       let port = null;
@@ -134,6 +139,11 @@ export function useSerial() {
     } catch (err) {
       pushDebugLog("error", `Gagal membuka port: ${err.message}`);
       setError(err.message);
+      if (portRef.current) {
+        portRef.current = null;
+      }
+    } finally {
+      isConnectingRef.current = false;
     }
   }, [connectSimulated, pushDebugLog]);
 
@@ -147,6 +157,7 @@ export function useSerial() {
 
     readerRef.current = null;
     portRef.current = null;
+    isConnectingRef.current = false;
   }, [pushDebugLog]);
 
   useEffect(() => {
@@ -292,6 +303,7 @@ export function useSerial() {
     simulatorRef.current = null;
 
     clearInterval(simulateTimerRef.current);
+    isConnectingRef.current = false;
 
     try {
       await readerRef.current?.cancel();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "jembatan-timbang-v5"; // Bump version to v5 to clear v4 cache
+const CACHE_NAME = "jembatan-timbang-v6";
 const ASSETS_TO_CACHE = [
   "/"
 ];

@@ -95,10 +95,19 @@ export function useSerial() {
       return;
     }
 
-    if (isConnectingRef.current || portRef.current) {
-      if (portRef.current) {
-        setError("Sudah terhubung ke timbangan. Putuskan koneksi terlebih dahulu.");
+    if (isConnectingRef.current) {
+      return;
+    }
+
+    if (portRef.current) {
+      const alreadyOpen = !!portRef.current.readable || !!portRef.current.writable;
+      if (alreadyOpen) {
+        setIsConnected(true);
+        setError(null);
+        return;
       }
+
+      setError("Sudah terhubung ke timbangan. Putuskan koneksi terlebih dahulu.");
       return;
     }
 
@@ -111,6 +120,17 @@ export function useSerial() {
         const approvedPorts = await navigator.serial.getPorts();
         if (approvedPorts && approvedPorts.length > 0) {
           port = approvedPorts[0];
+          const alreadyOpen = !!port.readable || !!port.writable;
+
+          if (alreadyOpen) {
+            portRef.current = port;
+            setIsConnected(true);
+            setError(null);
+            pushDebugLog("info", "Port serial sudah aktif. Menggunakan koneksi yang ada.");
+            readLoop(port);
+            return;
+          }
+
           pushDebugLog("info", "Menemukan port serial yang sudah pernah diotorisasi. Menghubungkan secara otomatis...");
         }
       }
@@ -163,9 +183,28 @@ export function useSerial() {
   useEffect(() => {
     if (!("serial" in navigator)) return;
 
+    const handlePageHide = () => {
+      try {
+        if (readerRef.current) readerRef.current.cancel();
+        if (portRef.current && portRef.current.readable) {
+          portRef.current.close().catch(() => {});
+        }
+      } catch (error) {
+        // ignore cleanup error on page unload
+      }
+      readerRef.current = null;
+      portRef.current = null;
+      isConnectingRef.current = false;
+    };
+
     navigator.serial.addEventListener("disconnect", handlePhysicalDisconnect);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
+
     return () => {
       navigator.serial.removeEventListener("disconnect", handlePhysicalDisconnect);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
     };
   }, [handlePhysicalDisconnect]);
 
@@ -306,8 +345,12 @@ export function useSerial() {
     isConnectingRef.current = false;
 
     try {
-      await readerRef.current?.cancel();
-      await portRef.current?.close();
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+      }
+      if (portRef.current && portRef.current.readable) {
+        await portRef.current.close();
+      }
     } catch (err) {
       // abaikan error saat menutup
     } finally {
@@ -316,6 +359,7 @@ export function useSerial() {
 
       setIsConnected(false);
       setIsStable(false);
+      setError(null);
       pushDebugLog("info", "Koneksi diputuskan.");
     }
   }, [pushDebugLog]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSerial } from "../hooks/useSerial";
 import { cacheSyncedTransactionLocally, db, getPendingTransactions } from "../db/db";
 import { syncPendingTransactions } from "../services/syncService";
@@ -35,8 +35,11 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastSaved, setLastSaved] = useState(null);
   const [pendingSecondWeigh, setPendingSecondWeigh] = useState([]);
+  const [pendingSecondWeighError, setPendingSecondWeighError] = useState("");
   const [selectedPendingTransaction, setSelectedPendingTransaction] = useState(null);
   const [isTestingMode, setIsTestingMode] = useState(false);
+  const pendingSecondWeighRequestRef = useRef(false);
+  const pendingSecondWeighRetryAfterRef = useRef(0);
 
   // Master Alat Timbangan
   const [scales, setScales] = useState([]);
@@ -45,16 +48,28 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
   const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
   const headers = { "Content-Type": "application/json", Authorization: `Token ${userToken}` };
 
-  const refreshPendingSecondWeigh = async () => {
+  const refreshPendingSecondWeigh = async (forceServerRefresh = false) => {
+    if (pendingSecondWeighRequestRef.current) return;
+
     try {
-      if (navigator.onLine && userToken) {
+      if (
+        navigator.onLine &&
+        userToken &&
+        (forceServerRefresh || Date.now() >= pendingSecondWeighRetryAfterRef.current)
+      ) {
+        pendingSecondWeighRequestRef.current = true;
         const response = await fetch(`${API_BASE_URL}/weighing/pending-second-weigh/`, {
           headers: { Authorization: `Token ${userToken}` },
         });
-        if (response.ok) {
+        if (!response.ok) {
+          pendingSecondWeighRetryAfterRef.current = Date.now() + 60000;
+          setPendingSecondWeighError(`Server gagal memuat daftar timbang kedua (HTTP ${response.status}). Data lokal tetap tersedia.`);
+        } else {
           const payload = await response.json();
           const serverRows = Array.isArray(payload) ? payload : (payload.results || []);
           await Promise.all(serverRows.map((transaction) => cacheSyncedTransactionLocally(transaction)));
+          pendingSecondWeighRetryAfterRef.current = 0;
+          setPendingSecondWeighError("");
         }
       }
 
@@ -68,7 +83,11 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
       pendingRows.sort((a, b) => new Date(a.created_at_local) - new Date(b.created_at_local));
       setPendingSecondWeigh(pendingRows);
     } catch (error) {
+      pendingSecondWeighRetryAfterRef.current = Date.now() + 60000;
+      setPendingSecondWeighError("Gagal menghubungi server untuk daftar timbang kedua. Data lokal tetap tersedia.");
       console.error("Gagal memuat kendaraan yang menunggu timbang kedua:", error);
+    } finally {
+      pendingSecondWeighRequestRef.current = false;
     }
   };
 
@@ -113,7 +132,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
     }, 5000);
     const handleOnline = () => {
       setIsOnline(true);
-      refreshPendingSecondWeigh();
+      refreshPendingSecondWeigh(true);
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -148,6 +167,15 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           isConnected={isConnected}
           onTestConnection={() => testConnection(serialConfig)}
         />
+
+        {pendingSecondWeighError && (
+          <div className="pending-second-weigh-error" role="status">
+            <span>{pendingSecondWeighError}</span>
+            <button type="button" className="btn-secondary" onClick={() => refreshPendingSecondWeigh(true)}>
+              Coba lagi
+            </button>
+          </div>
+        )}
 
         {pendingSecondWeigh.length > 0 && (
           <details className="pending-second-weigh">

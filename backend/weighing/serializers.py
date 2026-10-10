@@ -176,22 +176,37 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
 
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            is_admin = request.user.is_superuser or request.user.groups.filter(name="Admin").exists()
+            is_admin = (
+                request.user.is_superuser
+                or request.user.groups.filter(name="Admin").exists()
+            )
             if not is_admin:
                 try:
                     profile = request.user.profile
                 except UserProfile.DoesNotExist:
                     profile = None
                 if not profile or not profile.warehouse_id:
-                    raise serializers.ValidationError("Akun operator belum ditugaskan ke warehouse.")
+                    raise serializers.ValidationError(
+                        "Akun operator belum ditugaskan ke warehouse."
+                    )
                 submitted_warehouse = attrs.get("warehouse")
-                if submitted_warehouse and submitted_warehouse.pk != profile.warehouse_id:
-                    raise serializers.ValidationError("Operator hanya dapat menyimpan transaksi pada warehouse yang ditugaskan.")
+                if (
+                    submitted_warehouse
+                    and submitted_warehouse.pk != profile.warehouse_id
+                ):
+                    raise serializers.ValidationError(
+                        "Operator hanya dapat menyimpan transaksi pada warehouse yang ditugaskan."
+                    )
                 transaction_id = attrs.get("id")
-                if transaction_id and WeighingTransaction.objects.filter(pk=transaction_id).exclude(
-                    warehouse_id=profile.warehouse_id
-                ).exists():
-                    raise serializers.ValidationError("Operator tidak dapat mengubah transaksi milik warehouse lain.")
+                if (
+                    transaction_id
+                    and WeighingTransaction.objects.filter(pk=transaction_id)
+                    .exclude(warehouse_id=profile.warehouse_id)
+                    .exists()
+                ):
+                    raise serializers.ValidationError(
+                        "Operator tidak dapat mengubah transaksi milik warehouse lain."
+                    )
                 attrs["warehouse"] = profile.warehouse
 
         # Validation for IN/OUT cycle
@@ -244,14 +259,21 @@ class WeighingTransactionSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.ReadOnlyField(source="warehouse.name", default=None)
-    weighing_scale_name = serializers.ReadOnlyField(source="weighing_scale.name", default=None)
+    weighing_scale_name = serializers.ReadOnlyField(
+        source="weighing_scale.name", default=None
+    )
     weighing_scale = serializers.PrimaryKeyRelatedField(
         queryset=WeighingScale.objects.all(), required=False, allow_null=True
     )
 
     class Meta:
         model = UserProfile
-        fields = ["warehouse", "warehouse_name", "weighing_scale", "weighing_scale_name"]
+        fields = [
+            "warehouse",
+            "warehouse_name",
+            "weighing_scale",
+            "weighing_scale_name",
+        ]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -283,15 +305,25 @@ class UserSerializer(serializers.ModelSerializer):
             return attrs
 
         profile_data = attrs.get("profile") or {}
-        existing_profile = getattr(self.instance, "profile", None) if self.instance else None
-        warehouse = profile_data.get("warehouse", getattr(existing_profile, "warehouse", None))
-        scale = profile_data.get("weighing_scale", getattr(existing_profile, "weighing_scale", None))
+        existing_profile = (
+            getattr(self.instance, "profile", None) if self.instance else None
+        )
+        warehouse = profile_data.get(
+            "warehouse", getattr(existing_profile, "warehouse", None)
+        )
+        scale = profile_data.get(
+            "weighing_scale", getattr(existing_profile, "weighing_scale", None)
+        )
         if not warehouse or not scale:
-            raise serializers.ValidationError({
-                "profile": "Operator wajib ditugaskan ke satu warehouse dan satu alat timbang."
-            })
+            raise serializers.ValidationError(
+                {
+                    "profile": "Operator wajib ditugaskan ke satu warehouse dan satu alat timbang."
+                }
+            )
         if not scale.is_active:
-            raise serializers.ValidationError({"profile": "Alat timbang untuk operator harus aktif."})
+            raise serializers.ValidationError(
+                {"profile": "Alat timbang untuk operator harus aktif."}
+            )
         return attrs
 
     def get_roles(self, obj):
@@ -345,7 +377,9 @@ class UserSerializer(serializers.ModelSerializer):
             if not profile:
                 profile = UserProfile.objects.create(user=instance)
             profile.warehouse = profile_data.get("warehouse", profile.warehouse)
-            profile.weighing_scale = profile_data.get("weighing_scale", profile.weighing_scale)
+            profile.weighing_scale = profile_data.get(
+                "weighing_scale", profile.weighing_scale
+            )
             profile.save()
 
         return instance

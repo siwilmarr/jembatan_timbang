@@ -60,7 +60,9 @@ class CustomObtainAuthToken(ObtainAuthToken):
                 profile = None
             if not profile or not profile.warehouse_id or not profile.weighing_scale_id:
                 return Response(
-                    {"detail": "Akun operator belum ditugaskan ke warehouse dan alat timbang oleh Admin."},
+                    {
+                        "detail": "Akun operator belum ditugaskan ke warehouse dan alat timbang oleh Admin."
+                    },
                     status=status.HTTP_403_FORBIDDEN,
                 )
             if not profile.weighing_scale.is_active:
@@ -129,7 +131,10 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = WeighingTransaction.objects.all()
-        is_admin = self.request.user.is_superuser or self.request.user.groups.filter(name="Admin").exists()
+        is_admin = (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name="Admin").exists()
+        )
         if not is_admin:
             try:
                 assigned_warehouse_id = self.request.user.profile.warehouse_id
@@ -294,7 +299,10 @@ class WeighingScaleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        is_admin = self.request.user.is_superuser or self.request.user.groups.filter(name="Admin").exists()
+        is_admin = (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name="Admin").exists()
+        )
         if not is_admin:
             try:
                 scale_id = self.request.user.profile.weighing_scale_id

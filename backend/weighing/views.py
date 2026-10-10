@@ -32,7 +32,12 @@ from .serializers import (
     SiteProfileSerializer,
     PriceListSerializer,
 )
-from .permissions import IsAdminOrReadOnly, IsAdminOrReadOnlyMaster, IsAdminUserOnly
+from .permissions import (
+    IsAdminOrOperatorMaster,
+    IsAdminOrReadOnly,
+    IsAdminOrReadOnlyMaster,
+    IsAdminUserOnly,
+)
 
 
 class CustomObtainAuthToken(ObtainAuthToken):
@@ -47,14 +52,49 @@ class CustomObtainAuthToken(ObtainAuthToken):
         if user.is_superuser and "Admin" not in roles:
             roles.append("Admin")
 
+        is_admin = user.is_superuser or "Admin" in roles
+        if not is_admin and "Operator" in roles:
+            try:
+                profile = user.profile
+            except UserProfile.DoesNotExist:
+                profile = None
+            if not profile or not profile.warehouse_id or not profile.weighing_scale_id:
+                return Response(
+                    {
+                        "detail": "Akun operator belum ditugaskan ke warehouse dan alat timbang oleh Admin."
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if not profile.weighing_scale.is_active:
+                return Response(
+                    {"detail": "Alat timbang operator sedang nonaktif. Hubungi Admin."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         # Ambil info warehouse dari UserProfile (jika ada)
         warehouse_id = None
         warehouse_name = None
+        weighing_scale_id = None
+        weighing_scale_name = None
+        weighing_scale_config = None
         try:
             profile = user.profile
             if profile.warehouse:
                 warehouse_id = profile.warehouse.id
                 warehouse_name = profile.warehouse.name
+            if profile.weighing_scale and profile.weighing_scale.is_active:
+                scale = profile.weighing_scale
+                weighing_scale_id = scale.id
+                weighing_scale_name = scale.name
+                weighing_scale_config = {
+                    "id": scale.id,
+                    "name": scale.name,
+                    "indicator_type": scale.indicator_type,
+                    "baud_rate": scale.baud_rate,
+                    "data_bits": scale.data_bits,
+                    "stop_bits": scale.stop_bits,
+                    "parity": scale.parity,
+                }
         except UserProfile.DoesNotExist:
             pass
 
@@ -66,6 +106,9 @@ class CustomObtainAuthToken(ObtainAuthToken):
                 "roles": roles,
                 "warehouse_id": warehouse_id,
                 "warehouse_name": warehouse_name,
+                "weighing_scale_id": weighing_scale_id,
+                "weighing_scale_name": weighing_scale_name,
+                "weighing_scale": weighing_scale_config,
             }
         )
 
@@ -88,6 +131,19 @@ class WeighingTransactionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = WeighingTransaction.objects.all()
+        is_admin = (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name="Admin").exists()
+        )
+        if not is_admin:
+            try:
+                assigned_warehouse_id = self.request.user.profile.warehouse_id
+            except UserProfile.DoesNotExist:
+                assigned_warehouse_id = None
+            if assigned_warehouse_id:
+                queryset = queryset.filter(warehouse_id=assigned_warehouse_id)
+            else:
+                queryset = queryset.none()
         gte = self.request.query_params.get("created_at_local_gte", None)
         lte = self.request.query_params.get("created_at_local_lte", None)
         wh = self.request.query_params.get("warehouse_id", None)
@@ -186,7 +242,7 @@ class DestinationViewSet(viewsets.ModelViewSet):
 class CargoViewSet(viewsets.ModelViewSet):
     queryset = Cargo.objects.all()
     serializer_class = CargoSerializer
-    permission_classes = [IsAdminOrReadOnlyMaster]
+    permission_classes = [IsAdminOrOperatorMaster]
     pagination_class = None
 
 
@@ -210,14 +266,14 @@ class UserViewSet(viewsets.ModelViewSet):
 class UnitViewSet(viewsets.ModelViewSet):
     queryset = Unit.objects.all().order_by("name")
     serializer_class = UnitSerializer
-    permission_classes = [IsAdminOrReadOnlyMaster]
+    permission_classes = [IsAdminOrOperatorMaster]
     pagination_class = None
 
 
 class CustomerSupplierViewSet(viewsets.ModelViewSet):
     queryset = CustomerSupplier.objects.all().order_by("name")
     serializer_class = CustomerSupplierSerializer
-    permission_classes = [IsAdminOrReadOnlyMaster]
+    permission_classes = [IsAdminOrOperatorMaster]
     pagination_class = None
 
 
@@ -243,6 +299,16 @@ class WeighingScaleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        is_admin = (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name="Admin").exists()
+        )
+        if not is_admin:
+            try:
+                scale_id = self.request.user.profile.weighing_scale_id
+            except UserProfile.DoesNotExist:
+                scale_id = None
+            qs = qs.filter(pk=scale_id, is_active=True) if scale_id else qs.none()
         active_only = self.request.query_params.get("active_only")
         if active_only == "1":
             qs = qs.filter(is_active=True)

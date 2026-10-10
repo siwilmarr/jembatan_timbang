@@ -45,6 +45,9 @@ export default function Login({ onLoginSuccess }) {
         user_id: data.user_id,
         warehouse_id: data.warehouse_id,
         warehouse_name: data.warehouse_name,
+        weighing_scale_id: data.weighing_scale_id,
+        weighing_scale_name: data.weighing_scale_name,
+        weighing_scale: data.weighing_scale,
       }));
 
       // Trigger callback sukses

@@ -3,18 +3,21 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/env";
 
-export default function AdminPanel() {
+export default function AdminPanel({ userRole = [] }) {
+  const isAdmin = userRole.includes("Admin");
+  const operatorTabs = ["cargos", "units", "customers"];
   const [activeSubTab, setActiveSubTab] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("admin_active_subtab") || "users";
+      const savedTab = localStorage.getItem("admin_active_subtab");
+      return isAdmin ? (savedTab || "users") : (operatorTabs.includes(savedTab) ? savedTab : "cargos");
     }
-    return "users";
+    return isAdmin ? "users" : "cargos";
   });
 
   useEffect(() => {
     const handleStorageChange = () => {
       const val = localStorage.getItem("admin_active_subtab");
-      if (val && val !== activeSubTab) {
+      if (val && val !== activeSubTab && (isAdmin || operatorTabs.includes(val))) {
         setActiveSubTab(val);
       }
     };
@@ -24,11 +27,15 @@ export default function AdminPanel() {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("admin_subtab_changed", handleStorageChange);
     };
-  }, [activeSubTab]);
+  }, [activeSubTab, isAdmin]);
 
   useEffect(() => {
     localStorage.setItem("admin_active_subtab", activeSubTab);
   }, [activeSubTab]);
+
+  useEffect(() => {
+    if (!isAdmin && !operatorTabs.includes(activeSubTab)) setActiveSubTab("cargos");
+  }, [activeSubTab, isAdmin]);
   const [users, setUsers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [destinations, setDestinations] = useState([]);
@@ -72,6 +79,7 @@ export default function AdminPanel() {
     email: "",
     roles_write: ["Operator"],
     warehouse: "",
+    weighing_scale: "",
   });
 
   const [warehouseForm, setWarehouseForm] = useState({
@@ -137,20 +145,23 @@ export default function AdminPanel() {
 
   // Fetch Data
   const fetchData = async () => {
+    if (!isAdmin && !operatorTabs.includes(activeSubTab)) return;
     if (!navigator.onLine) {
-      setError("Anda sedang offline. Tidak dapat memuat data panel admin.");
+      setError("Anda sedang offline. Tidak dapat memuat data master.");
       return;
     }
     setLoading(true);
     setError("");
     try {
       if (activeSubTab === "users") {
-        const [uRes, wRes] = await Promise.all([
+        const [uRes, wRes, sRes] = await Promise.all([
           fetch(`${API_BASE}/users/`, { headers }),
           fetch(`${API_BASE}/warehouses/`, { headers }),
+          fetch(`${API_BASE}/scales/`, { headers }),
         ]);
         if (uRes.ok) setUsers(await uRes.json());
         if (wRes.ok) setWarehouses(await wRes.json());
+        if (sRes.ok) setScales(await sRes.json());
       } else if (activeSubTab === "warehouses") {
         const res = await fetch(`${API_BASE}/warehouses/`, { headers });
         if (res.ok) setWarehouses(await res.json());
@@ -232,7 +243,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     fetchData();
-  }, [activeSubTab]);
+  }, [activeSubTab, isAdmin]);
 
   // Handle CRUD untuk User
   const handleUserSubmit = async (e) => {
@@ -248,7 +259,10 @@ export default function AdminPanel() {
         username: userForm.username,
         email: userForm.email,
         roles_write: userForm.roles_write,
-        profile: userForm.warehouse ? { warehouse: Number(userForm.warehouse) } : null,
+        profile: {
+          warehouse: userForm.warehouse ? Number(userForm.warehouse) : null,
+          weighing_scale: userForm.weighing_scale ? Number(userForm.weighing_scale) : null,
+        },
       };
       if (userForm.password) {
         payload.password = userForm.password;
@@ -262,11 +276,11 @@ export default function AdminPanel() {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || errData.username?.[0] || "Gagal menyimpan user.");
+        throw new Error(errData.detail || errData.profile?.[0] || errData.username?.[0] || "Gagal menyimpan user.");
       }
 
       setSuccess(isEdit ? "User berhasil diperbarui." : "User berhasil ditambahkan.");
-      setUserForm({ id: null, username: "", password: "", email: "", roles_write: ["Operator"], warehouse: "" });
+      setUserForm({ id: null, username: "", password: "", email: "", roles_write: ["Operator"], warehouse: "", weighing_scale: "" });
       fetchData();
     } catch (err) {
       setError(err.message);
@@ -693,13 +707,14 @@ export default function AdminPanel() {
 
     <div className="admin-panel" style={{ padding: "1.5rem" }}>
       <header className="history-dashboard__header">
-        <h2>Panel Administrasi Master Data</h2>
-        <p>Kelola semua modul administrasi, user, dan data master jembatan timbang</p>
+        <h2>{isAdmin ? "Panel Administrasi Master Data" : "Kelola Data Operasional"}</h2>
+        <p>{isAdmin ? "Kelola user, konfigurasi, dan data master jembatan timbang" : "Kelola customer, muatan, dan unit kendaraan"}</p>
       </header>
 
       {/* Sub Tab Menu */}
       <div className="navbar__tabs" style={{ marginBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.5rem" }}>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "users" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("users")}
@@ -707,6 +722,7 @@ export default function AdminPanel() {
           👤 Kelola User
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "warehouses" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("warehouses")}
@@ -714,6 +730,7 @@ export default function AdminPanel() {
           🏭 Kelola Gudang (Warehouse)
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "destinations" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("destinations")}
@@ -742,6 +759,7 @@ export default function AdminPanel() {
           🤝 Kelola Customer/Supplier
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "weighing-types" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("weighing-types")}
@@ -749,6 +767,7 @@ export default function AdminPanel() {
           ⚖️ Jenis Timbangan
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "scales" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("scales")}
@@ -756,6 +775,7 @@ export default function AdminPanel() {
           🔌 Alat Timbangan
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "profile" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("profile")}
@@ -763,6 +783,7 @@ export default function AdminPanel() {
           🏢 Profil Perusahaan
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "price-list" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("price-list")}
@@ -770,6 +791,7 @@ export default function AdminPanel() {
           💰 Master Harga
         </button>
         <button
+          hidden={!isAdmin}
           type="button"
           className={`navbar__tab ${activeSubTab === "database" ? "navbar__tab--active" : ""}`}
           onClick={() => setActiveSubTab("database")}
@@ -785,7 +807,7 @@ export default function AdminPanel() {
       {loading && <p className="text-muted">Sedang memproses data...</p>}
 
       {/* SECTION KELOLA USER */}
-      {!loading && activeSubTab === "users" && (
+      {isAdmin && !loading && activeSubTab === "users" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form Create/Edit User */}
           <form onSubmit={handleUserSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -853,14 +875,29 @@ export default function AdminPanel() {
             </label>
 
             <label>
-              Penugasan Warehouse
+              Warehouse Operator
               <select
                 value={userForm.warehouse}
                 onChange={(e) => setUserForm({ ...userForm, warehouse: e.target.value })}
+                required={userForm.roles_write.includes("Operator")}
               >
                 <option value="">-- Tanpa Gudang --</option>
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Alat Timbang Operator
+              <select
+                value={userForm.weighing_scale}
+                onChange={(e) => setUserForm({ ...userForm, weighing_scale: e.target.value })}
+                required={userForm.roles_write.includes("Operator")}
+              >
+                <option value="">-- Pilih satu alat timbang --</option>
+                {scales.filter((scale) => scale.is_active).map((scale) => (
+                  <option key={scale.id} value={scale.id}>{scale.name}</option>
                 ))}
               </select>
             </label>
@@ -871,7 +908,7 @@ export default function AdminPanel() {
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setUserForm({ id: null, username: "", password: "", email: "", roles_write: ["Operator"], warehouse: "" })}
+                  onClick={() => setUserForm({ id: null, username: "", password: "", email: "", roles_write: ["Operator"], warehouse: "", weighing_scale: "" })}
                 >
                   Batal
                 </button>
@@ -888,6 +925,7 @@ export default function AdminPanel() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Warehouse</th>
+                  <th>Alat Timbang</th>
                   <th>Aksi</th>
                 </tr>
               </thead>
@@ -902,6 +940,7 @@ export default function AdminPanel() {
                       </span>
                     </td>
                     <td>{u.profile?.warehouse_name || "-"}</td>
+                    <td>{u.profile?.weighing_scale_name || "-"}</td>
                     <td>
                       <div className="table-actions">
                         <button
@@ -914,6 +953,7 @@ export default function AdminPanel() {
                             email: u.email || "",
                             roles_write: u.roles || ["Operator"],
                             warehouse: u.profile?.warehouse || "",
+                            weighing_scale: u.profile?.weighing_scale || "",
                           })}
                         >
                           Edit
@@ -936,7 +976,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION KELOLA WAREHOUSE */}
-      {!loading && activeSubTab === "warehouses" && (
+      {isAdmin && !loading && activeSubTab === "warehouses" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form */}
           <form onSubmit={handleWarehouseSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1011,7 +1051,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION KELOLA TUJUAN */}
-      {!loading && activeSubTab === "destinations" && (
+      {isAdmin && !loading && activeSubTab === "destinations" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form */}
           <form onSubmit={handleDestinationSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1318,7 +1358,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION JENIS TIMBANGAN */}
-      {!loading && activeSubTab === "weighing-types" && (
+      {isAdmin && !loading && activeSubTab === "weighing-types" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form */}
           <form onSubmit={handleWeighingTypeSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1436,7 +1476,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION ALAT TIMBANGAN */}
-      {!loading && activeSubTab === "scales" && (
+      {isAdmin && !loading && activeSubTab === "scales" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form */}
           <form onSubmit={handleScaleSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1560,7 +1600,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION KONFIGURASI DATABASE */}
-      {!loading && activeSubTab === "database" && (
+      {isAdmin && !loading && activeSubTab === "database" && (
         <div style={{ maxWidth: "600px", margin: "0 auto", background: "#f8fafc", padding: "2rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
           <h3 style={{ marginBottom: "1.5rem" }}>⚙️ Konfigurasi Database Utama</h3>
           
@@ -1665,7 +1705,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION PROFIL PERUSAHAAN (PEMILIK TIMBANGAN) */}
-      {!loading && activeSubTab === "profile" && (
+      {isAdmin && !loading && activeSubTab === "profile" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "2rem" }}>
           {/* Form Create / Edit */}
           <form onSubmit={handleProfileSubmit} className="weighing-form" style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1817,7 +1857,7 @@ export default function AdminPanel() {
       )}
 
       {/* SECTION MASTER HARGA */}
-      {!loading && activeSubTab === "price-list" && (() => {
+      {isAdmin && !loading && activeSubTab === "price-list" && (() => {
         const todayStr = new Date().toISOString().split("T")[0];
         // Cari harga aktif untuk setiap jenis muatan (effective_date <= todayStr, yang paling baru)
         const activePriceMap = {};

@@ -89,6 +89,7 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
   const [selectedWeighingType, setSelectedWeighingType] = useState(null);
   const [priceLists, setPriceLists] = useState([]);
   const [activeCycle, setActiveCycle] = useState(null);
+  const [masterDataError, setMasterDataError] = useState("");
 
   const API_BASE = API_BASE_URL;
   const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
@@ -116,15 +117,41 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
 
         // 2. Jika online, update dari server
         if (navigator.onLine && userToken) {
-          const [destRes, cargoRes, unitRes, custRes, wtRes, spRes, plRes] = await Promise.all([
-            fetch(`${API_BASE}/destinations/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/cargos/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/units/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/customers/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/weighing-types/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/site-profiles/`, { headers: { Authorization: `Token ${userToken}` } }),
-            fetch(`${API_BASE}/price-lists/`, { headers: { Authorization: `Token ${userToken}` } }),
-          ]);
+          const masterEndpoints = [
+            "destinations",
+            "cargos",
+            "units",
+            "customers",
+            "weighing-types",
+            "site-profiles",
+            "price-lists",
+          ];
+          const masterResults = await Promise.allSettled(
+            masterEndpoints.map((endpoint) =>
+              fetch(`${API_BASE}/${endpoint}/`, {
+                headers: { Authorization: `Token ${userToken}` },
+              })
+            )
+          );
+          const [destRes, cargoRes, unitRes, custRes, wtRes, spRes, plRes] = masterResults.map(
+            (result) => result.status === "fulfilled" ? result.value : null
+          );
+          const failedEndpoints = masterResults.flatMap((result, index) => {
+            if (result.status === "rejected") {
+              console.error(`Gagal menghubungi API /${masterEndpoints[index]}/:`, result.reason);
+              return [masterEndpoints[index]];
+            }
+            if (!result.value.ok) {
+              console.error(`API /${masterEndpoints[index]}/ mengembalikan HTTP ${result.value.status}`);
+              return [masterEndpoints[index]];
+            }
+            return [];
+          });
+          setMasterDataError(
+            failedEndpoints.length
+              ? `Sebagian data master gagal dimuat: ${failedEndpoints.join(", ")}. Data yang tersedia tetap ditampilkan.`
+              : ""
+          );
 
           if (destRes.ok) {
             const destList = await destRes.json();
@@ -503,6 +530,7 @@ export default function WeighingForm({ lockedWeight, operatorUsername, onSaved, 
         </div>
       )}
       <form className="weighing-form weighing-form--compact" onSubmit={handleSubmit} noValidate>
+        {masterDataError && <p className="error" role="status">{masterDataError}</p>}
         {userWarehouse?.name && (
           <div className="weighing-form__warehouse-badge">
             Warehouse: <strong>{userWarehouse.name}</strong>

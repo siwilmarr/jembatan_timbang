@@ -17,6 +17,9 @@ class UserProfile(models.Model):
     warehouse = models.ForeignKey(
         Warehouse, on_delete=models.SET_NULL, null=True, blank=True
     )
+    weighing_scale = models.ForeignKey(
+        "WeighingScale", on_delete=models.SET_NULL, null=True, blank=True
+    )
 
     def __str__(self):
         return f"{self.user.username} - {self.warehouse.name if self.warehouse else 'No Warehouse'}"

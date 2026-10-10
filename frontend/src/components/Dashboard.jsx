@@ -10,7 +10,7 @@ import SyncStatus from "./SyncStatus";
 import SettingsPanel, { loadSerialConfig } from "./Settingspanel";
 import DebugPanel from "./DebugPanel";
 
-export default function Dashboard({ userRole, operatorUsername, userWarehouse }) {
+export default function Dashboard({ userRole, operatorUsername, userWarehouse, assignedScale }) {
   const {
     connect,
     connectSimulated,
@@ -43,7 +43,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
 
   // Master Alat Timbangan
   const [scales, setScales] = useState([]);
-  const [selectedScaleId, setSelectedScaleId] = useState("");
+  const [selectedScaleId, setSelectedScaleId] = useState(assignedScale?.id ? String(assignedScale.id) : "");
 
   const userToken = typeof window !== "undefined" ? localStorage.getItem("user_token") : "";
   const headers = { "Content-Type": "application/json", Authorization: `Token ${userToken}` };
@@ -99,8 +99,11 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
         if (res.ok) {
           const data = await res.json();
           setScales(data);
-          // Auto-pilih jika hanya ada 1 alat timbangan aktif
-          if (data.length === 1) setSelectedScaleId(String(data[0].id));
+          if (assignedScale?.id) {
+            setSelectedScaleId(String(assignedScale.id));
+          } else if (data.length === 1) {
+            setSelectedScaleId(String(data[0].id));
+          }
         }
       } catch (e) {
         console.warn("Gagal memuat daftar alat timbangan:", e);
@@ -112,15 +115,17 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
 
   // Config serial & protokol yang efektif berdasarkan alat timbangan yang dipilih
   const selectedScale = scales.find(s => String(s.id) === selectedScaleId) || null;
-  const effectiveSerialConfig = selectedScale
+  const effectiveScale = selectedScale || assignedScale || null;
+  const effectiveSerialConfig = effectiveScale
     ? {
-        baudRate: selectedScale.baud_rate,
-        dataBits: selectedScale.data_bits,
-        stopBits: selectedScale.stop_bits,
-        parity: selectedScale.parity,
-        indicator_type: selectedScale.indicator_type,
+        baudRate: effectiveScale.baud_rate,
+        dataBits: effectiveScale.data_bits,
+        stopBits: effectiveScale.stop_bits,
+        parity: effectiveScale.parity,
+        indicator_type: effectiveScale.indicator_type,
       }
     : { ...serialConfig, indicator_type: "CAS" };
+  const isAdmin = userRole?.includes("Admin");
 
   useEffect(() => {
     const refreshPending = () => getPendingTransactions().then((rows) => setPendingCount(rows.length));
@@ -161,12 +166,14 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           <SyncStatus pendingCount={pendingCount} />
         </header>
 
-        <SettingsPanel
-          config={serialConfig}
-          onChange={setSerialConfig}
-          isConnected={isConnected}
-          onTestConnection={() => testConnection(serialConfig)}
-        />
+        {isAdmin && (
+          <SettingsPanel
+            config={serialConfig}
+            onChange={setSerialConfig}
+            isConnected={isConnected}
+            onTestConnection={() => testConnection(serialConfig)}
+          />
+        )}
 
         {pendingSecondWeighError && (
           <div className="pending-second-weigh-error" role="status">
@@ -207,8 +214,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
           />
         )}
 
-        {/* Pilihan Alat Timbangan — hanya tampil di mode production */}
-        {APP_MODE !== "demo" && scales.length > 0 && (
+        {APP_MODE !== "demo" && (scales.length > 0 || assignedScale) && (
           <div style={{
             background: "#f8fafc",
             border: "1px solid #e2e8f0",
@@ -221,46 +227,45 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
             flexWrap: "wrap",
           }}>
             <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#475569" }}>
-              🔌 Alat Timbangan:
+              🔌 {isAdmin ? "Alat Timbangan:" : "Timbangan Operator:"}
             </span>
-            <select
-              value={selectedScaleId}
-              onChange={e => setSelectedScaleId(e.target.value)}
-              disabled={isConnected}
-              style={{
-                padding: "0.4rem 0.8rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-                background: isConnected ? "#f1f5f9" : "#fff",
-                color: "#334155",
-                fontWeight: 500,
-                cursor: isConnected ? "not-allowed" : "pointer",
-                minWidth: "220px",
-              }}
-            >
-              <option value="">-- Pilih Alat Timbangan --</option>
-              {scales.map(sc => (
-                <option key={sc.id} value={sc.id}>
-                  {sc.name} ({sc.indicator_type === "CAS" ? "CAS - Detail" : "GSC - Sederhana"})
-                </option>
-              ))}
-            </select>
-            {selectedScale && (
+            {isAdmin ? (
+              <select
+                value={selectedScaleId}
+                onChange={e => setSelectedScaleId(e.target.value)}
+                disabled={isConnected}
+                style={{
+                  padding: "0.4rem 0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.88rem",
+                  background: isConnected ? "#f1f5f9" : "#fff",
+                  color: "#334155",
+                  fontWeight: 500,
+                  cursor: isConnected ? "not-allowed" : "pointer",
+                  minWidth: "220px",
+                }}
+              >
+                <option value="">-- Pilih Alat Timbangan --</option>
+                {scales.map(sc => (
+                  <option key={sc.id} value={sc.id}>
+                    {sc.name} ({sc.indicator_type === "CAS" ? "CAS - Detail" : "GSC - Sederhana"})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <strong>{assignedScale?.name || "Belum ditugaskan"}</strong>
+            )}
+            {effectiveScale && (
               <span style={{
-                background: selectedScale.indicator_type === "CAS" ? "#eff6ff" : "#fef3c7",
-                color: selectedScale.indicator_type === "CAS" ? "#1e40af" : "#d97706",
+                background: effectiveScale.indicator_type === "CAS" ? "#eff6ff" : "#fef3c7",
+                color: effectiveScale.indicator_type === "CAS" ? "#1e40af" : "#d97706",
                 padding: "3px 10px",
                 borderRadius: "99px",
                 fontSize: "0.78rem",
                 fontWeight: 700,
               }}>
-                {selectedScale.baud_rate} baud · {selectedScale.data_bits}N{selectedScale.stop_bits} · parity={selectedScale.parity}
-              </span>
-            )}
-            {isConnected && (
-              <span style={{ fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>
-                (Putuskan koneksi terlebih dahulu untuk mengganti alat timbangan)
+                {effectiveScale.baud_rate} baud · {effectiveScale.data_bits}N{effectiveScale.stop_bits} · parity={effectiveScale.parity}
               </span>
             )}
           </div>
@@ -272,17 +277,17 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
               <>
                 <button
                   onClick={() => isTestingMode ? connectSimulated() : connect(effectiveSerialConfig, false)}
-                  disabled={!isTestingMode && APP_MODE !== "demo" && scales.length > 0 && !selectedScaleId}
-                  title={!selectedScaleId && scales.length > 0 ? "Pilih alat timbangan terlebih dahulu" : ""}
+                  disabled={!isTestingMode && APP_MODE !== "demo" && !effectiveScale}
+                  title={!effectiveScale ? "Admin perlu menetapkan alat timbang untuk akun ini" : ""}
                 >
                   🔌 Hubungkan Timbangan
                 </button>
-                {!isTestingMode && (
+                {isAdmin && !isTestingMode && (
                   <button
                     className="btn-secondary"
                     onClick={() => connect(effectiveSerialConfig, true)}
                     title="Pilih port baru secara manual"
-                    disabled={APP_MODE !== "demo" && scales.length > 0 && !selectedScaleId}
+                    disabled={APP_MODE !== "demo" && !effectiveScale}
                   >
                     🔍 Pilih Port Baru
                   </button>
@@ -291,7 +296,7 @@ export default function Dashboard({ userRole, operatorUsername, userWarehouse })
             ) : (
               <>
                 <button className="btn-disconnect" onClick={disconnect}>Putuskan Koneksi</button>
-                {!isTestingMode && (
+                {isAdmin && !isTestingMode && (
                   <button
                     className="btn-secondary"
                     onClick={() => connect(effectiveSerialConfig, true)}

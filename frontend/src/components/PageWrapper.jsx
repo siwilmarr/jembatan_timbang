@@ -212,7 +212,7 @@ export default function PageWrapper({ children, requireAdmin = false }) {
               >
                 📋 Riwayat & Laporan
               </button>
-              {user?.roles?.includes("Admin") && (
+              {(user?.roles?.includes("Admin") || user?.roles?.includes("Operator")) && (
                 <div className="sidebar__submenu-container" style={{ width: "100%" }}>
                   <button
                     type="button"
@@ -226,7 +226,7 @@ export default function PageWrapper({ children, requireAdmin = false }) {
                     }}
                     style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}
                   >
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>⚙️ Panel Admin</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>{user?.roles?.includes("Admin") ? "⚙️ Panel Admin" : "📚 Data Operasional"}</span>
                     <span className="sidebar__submenu-toggle-icon" style={{
                       fontSize: "0.75rem",
                       transform: isAdminMenuExpanded ? "rotate(180deg)" : "rotate(0deg)",
@@ -242,15 +242,17 @@ export default function PageWrapper({ children, requireAdmin = false }) {
                       paddingLeft: "1.25rem",
                       borderLeft: "2px solid rgba(255, 255, 255, 0.1)"
                     }}>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("users")}>👤 Kelola User</button>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("warehouses")}>🏭 Kelola Gudang</button>
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("users")}>👤 Kelola User</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("warehouses")}>🏭 Kelola Gudang</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("destinations")}>📍 Kelola Tujuan</button>}
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("cargos")}>📦 Kelola Muatan</button>
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("units")}>🚛 Kelola Unit</button>
                       <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("customers")}>🤝 Kelola Customer/Supplier</button>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("weighing-types")}>⚖️ Jenis Timbangan</button>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("scales")}>🔌 Alat Timbangan</button>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("profile")}>🏢 Profil Perusahaan</button>
-                      <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("database")}>⚙️ Konfigurasi Database</button>
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("weighing-types")}>⚖️ Jenis Timbangan</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("scales")}>🔌 Alat Timbangan</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("profile")}>🏢 Profil Perusahaan</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("price-list")}>💰 Master Harga</button>}
+                      {user?.roles?.includes("Admin") && <button type="button" className="sidebar__submenu-link" onClick={() => handleAdminSubTabClick("database")}>⚙️ Konfigurasi Database</button>}
                     </div>
 
                   )}

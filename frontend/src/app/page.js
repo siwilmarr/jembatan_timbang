@@ -22,6 +22,7 @@ export default function HomePage() {
         userRole={user?.roles}
         operatorUsername={user?.username}
         userWarehouse={{ id: user?.warehouse_id, name: user?.warehouse_name }}
+        assignedScale={user?.weighing_scale || null}
       />
     </PageWrapper>
   );

@@ -37,6 +37,19 @@ class IsAdminOrReadOnlyMaster(permissions.BasePermission):
         return is_admin
 
 
+class IsAdminOrOperatorMaster(permissions.BasePermission):
+    """Allow operators to maintain only the basic cargo, unit and customer masters."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if request.user.is_superuser or request.user.groups.filter(name="Admin").exists():
+            return True
+        return request.user.groups.filter(name="Operator").exists()
+
+
 class IsAdminUserOnly(permissions.BasePermission):
     """
     Custom permission to only allow Admins/Superusers access to user management APIs.
